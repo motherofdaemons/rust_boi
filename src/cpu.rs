@@ -1,3 +1,5 @@
+use log::info;
+
 use crate::instructions::Instruction;
 use crate::memory::GameBoyState;
 use crate::registers::Registers;
@@ -20,6 +22,7 @@ impl Cpu {
         }
 
         if let Some(instruction) = Instruction::from_byte(opcode, prefixed) {
+            info!("Executing opcode 0x{}{:x}", if prefixed {"cb"} else {""}, opcode);
             (instruction.execute)(&mut self.registers, memory);
         } else {
             let description = format!("0x{}{:x}", if prefixed { "cb" } else { "" }, opcode);

@@ -1,31 +1,49 @@
-use crate::registers::SmallRegister;
+use crate::registers::{SmallRegister, WideRegister};
 
 #[derive(Clone, Copy)]
 pub struct InstructionData {
-    pub flag_mask: u8,
-    pub flag_expected: u8,
-    pub small_reg_dst: SmallRegister,
+    pub flag_mask: Option<u8>,
+    pub flag_expected: Option<u8>,
+    pub small_reg_src: Option<SmallRegister>,
+    pub small_reg_dst: Option<SmallRegister>,
+    pub wide_reg_src: Option<WideRegister>,
+    pub wide_reg_dst: Option<WideRegister>,
 }
 
 impl InstructionData {
-    pub const fn const_default() -> Self {
+    pub const fn new() -> Self {
         Self {
-            flag_mask: 0,
-            flag_expected: 0,
-            small_reg_dst: SmallRegister::Unset,
+            flag_mask: None,
+            flag_expected: None,
+            small_reg_src: None,
+            small_reg_dst: None,
+            wide_reg_src: None,
+            wide_reg_dst: None,
         }
     }
-
-    pub const fn small_dst(target: SmallRegister) -> Self {
-        let mut data = InstructionData::const_default();
-        data.small_reg_dst = target;
-        data
+    pub const fn small_src(mut self, src: SmallRegister) -> Self {
+        self.small_reg_src = Some(src);
+        self
     }
 
-    pub const fn with_flags(flag_mask: u8, flag_exptected: u8) -> Self {
-        let mut data = InstructionData::const_default();
-        data.flag_mask = flag_mask;
-        data.flag_expected = flag_exptected;
-        data
+    pub const fn small_dst(mut self, dst: SmallRegister) -> Self {
+        self.small_reg_dst = Some(dst);
+        self
+    }
+
+    pub const fn wide_src(mut self, src: WideRegister) -> Self {
+        self.wide_reg_src = Some(src);
+        self
+    }
+
+    pub const fn wide_dst(mut self, dst: WideRegister) -> Self {
+        self.wide_reg_dst = Some(dst);
+        self
+    }
+
+    pub const fn with_flags(mut self, flag_mask: u8, flag_exptected: u8) -> Self {
+        self.flag_mask = Some(flag_mask);
+        self.flag_expected = Some(flag_exptected);
+        self
     }
 }

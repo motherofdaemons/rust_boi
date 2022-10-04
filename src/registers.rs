@@ -1,5 +1,3 @@
-use std::fmt::Error;
-
 #[derive(Default)]
 pub struct Registers {
     pc: u16,
@@ -16,7 +14,7 @@ pub struct RegisterPair {
     pub r: u8,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum SmallRegister {
     B,
     C,
@@ -26,10 +24,9 @@ pub enum SmallRegister {
     E,
     H,
     L,
-    Unset,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum WideRegister {
     PC,
     SP,
@@ -37,7 +34,6 @@ pub enum WideRegister {
     AF,
     DE,
     HL,
-    Unset,
 }
 
 pub const ZERO_FLAG: u8 = 0x80;
@@ -103,7 +99,6 @@ impl Registers {
             SmallRegister::E => self.de.r,
             SmallRegister::H => self.hl.l,
             SmallRegister::L => self.hl.r,
-            SmallRegister::Unset => panic!("We should never have an unset register!"),
         }
     }
 
@@ -117,7 +112,6 @@ impl Registers {
             SmallRegister::E => self.de.r = val,
             SmallRegister::H => self.hl.l = val,
             SmallRegister::L => self.hl.r = val,
-            SmallRegister::Unset => panic!("We should never have an unset register!"),
         }
     }
 
@@ -129,7 +123,6 @@ impl Registers {
             WideRegister::AF => self.af.into(),
             WideRegister::DE => self.de.into(),
             WideRegister::HL => self.hl.into(),
-            WideRegister::Unset => panic!("Wide register should never be unset"),
         }
     }
 
@@ -141,7 +134,6 @@ impl Registers {
             WideRegister::AF => self.af = RegisterPair::from(val),
             WideRegister::DE => self.de = RegisterPair::from(val),
             WideRegister::HL => self.hl = RegisterPair::from(val),
-            _ => panic!("Unkown write_r16 target {:?}", reg),
         }
     }
 

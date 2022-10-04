@@ -5,6 +5,8 @@ mod instructions;
 mod memory;
 mod registers;
 
+use log::info;
+
 use crate::game_boy::GameBoy;
 
 use std::error;
@@ -12,10 +14,11 @@ use std::error;
 type Result<T> = std::result::Result<T, Box<dyn error::Error>>;
 
 fn main() {
+    env_logger::init();
+    info!("starting up");
     let mut gb = GameBoy::new(Some(
-        "/home/lilith/Code/rust_boi/roms/gb-test-roms/cpu_instrs/cpu_instrs.gb",
+        "/home/lilith/Code/rust_boi/roms/Tetris.gb",
     ))
     .unwrap();
-    gb.cpu.registers.set_pc(0x100);
     gb.run();
 }
