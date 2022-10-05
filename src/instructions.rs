@@ -67,7 +67,7 @@ pub fn jump_relative_immediate(
         registers.inc_pc(1);
     }
 }
-pub fn load_register(
+pub fn load_small_register(
     registers: &mut Registers,
     memory: &mut GameBoyState,
     additional: &InstructionData,
@@ -79,9 +79,37 @@ pub fn load_register(
     } else if additional.wide_reg_src.is_some() {
         let val = memory.read_u8(registers.read_r16(additional.wide_reg_src.unwrap()));
         registers.write_r8(additional.small_reg_dst.unwrap(), val);
+    } else if additional.immediate_8 {
+        let val = memory.read_u8(registers.get_pc());
+        registers.inc_pc(1);
+        registers.write_r8(additional.small_reg_dst.unwrap(), val);
     } else {
-        panic!("We should have either a small or wide register sorce to load from")
+        panic!("We should have either a small or wide register source or immediate to load from")
     }
+}
+
+pub fn load_wide_register(
+    registers: &mut Registers,
+    memory: &mut GameBoyState,
+    additional: &InstructionData,
+) {
+    registers.inc_pc(1);
+    if additional.immediate_16 {
+        let val = memory.read_u16(registers.get_pc());
+        registers.inc_pc(2);
+        registers.write_r16(additional.wide_reg_dst.unwrap(), val);
+    }
+}
+
+pub fn write_to_memory(
+    registers: &mut Registers,
+    memory: &mut GameBoyState,
+    additional: &InstructionData,
+) {
+    registers.inc_pc(1);
+    let address = registers.read_r16(additional.wide_reg_src.unwrap());
+    let val = registers.read_r8(additional.small_reg_src.unwrap());
+    memory.write_u8(address, val);
 }
 
 pub fn compare_to_a(
@@ -121,21 +149,40 @@ fn subtract(acc: u8, operand: u8, carry: bool, registers: &mut Registers) -> u8 
     res
 }
 
-pub fn inc_small_register(
-    registers: &mut Registers,
-    _memory: &mut GameBoyState,
-    additional: &InstructionData,
-) {
+pub fn inc(registers: &mut Registers, _memory: &mut GameBoyState, additional: &InstructionData) {
     registers.inc_pc(1);
-    let value = registers.read_r8(additional.small_reg_dst.unwrap());
-    let (result, _) = value.overflowing_add(1);
-    registers.write_r8(additional.small_reg_dst.unwrap(), result);
-    registers.set_flags(
-        Some(result == 0),
-        Some(false),
-        Some(check_for_half_carry(value, result)),
-        None,
-    );
+    if additional.small_reg_dst.is_some() {
+        let value = registers.read_r8(additional.small_reg_dst.unwrap());
+        let (result, _) = value.overflowing_add(1);
+        registers.write_r8(additional.small_reg_dst.unwrap(), result);
+        registers.set_flags(
+            Some(result == 0),
+            Some(false),
+            Some(check_for_half_carry(value, result)),
+            None,
+        );
+    } else if additional.wide_reg_dst.is_some() {
+        let value = registers.read_r16(additional.wide_reg_dst.unwrap());
+        let (result, _) = value.overflowing_add(1);
+        registers.write_r16(additional.wide_reg_dst.unwrap(), result);
+    } else {
+        panic!("Can only increment a register")
+    }
+}
+
+pub fn dec(registers: &mut Registers, _memory: &mut GameBoyState, additional: &InstructionData) {
+    registers.inc_pc(1);
+    if additional.small_reg_dst.is_some() {
+        let value = registers.read_r8(additional.small_reg_dst.unwrap());
+        let (result, _) = value.overflowing_sub(1);
+        registers.write_r8(additional.small_reg_dst.unwrap(), result);
+        registers.set_flags(
+            Some(result == 0),
+            Some(true),
+            Some(check_for_half_carry(value, result)),
+            None,
+        );
+    }
 }
 
 pub fn ret(registers: &mut Registers, memory: &mut GameBoyState, _additional: &InstructionData) {
@@ -164,26 +211,26 @@ impl Instruction {
         match byte {
             //No op
             0x00 => instr!("nop", 1, no_op, InstructionData::new()),
-            0x01 => todo!(),
-            0x02 => todo!(),
-            0x03 => todo!(),
-            0x04 => instr!("inc B", 1, inc_small_register, InstructionData::new().small_dst(SmallRegister::B)),
-            0x05 => todo!(),
-            0x06 => todo!(),
+            0x01 => instr!("ld bc, d16", 3, load_wide_register, InstructionData::new().wide_dst(WideRegister::BC).immediate_16()),
+            0x02 => instr!("ld bc, a", 2, write_to_memory, InstructionData::new().wide_src(WideRegister::BC).small_src(SmallRegister::A)),
+            0x03 => instr!("inc bc", 2, inc, InstructionData::new().wide_dst(WideRegister::BC)),
+            0x04 => instr!("inc b", 1, inc, InstructionData::new().small_dst(SmallRegister::B)),
+            0x05 => instr!("dec b", 1, dec, InstructionData::new().small_dst(SmallRegister::B)),
+            0x06 => instr!("ld b, d8", 2, load_small_register, InstructionData::new().small_dst(SmallRegister::B).immediate_8()),
             0x07 => todo!(),
             0x08 => todo!(),
             0x09 => todo!(),
             0x0A => todo!(),
             0x0B => todo!(),
-            0x0C => instr!("inc C", 1, inc_small_register, InstructionData::new().small_dst(SmallRegister::C)),
+            0x0C => instr!("inc c", 1, inc, InstructionData::new().small_dst(SmallRegister::C)),
             0x0D => todo!(),
             0x0E => todo!(),
             0x0F => todo!(),
             0x10 => todo!(),
-            0x11 => todo!(),
-            0x12 => todo!(),
+            0x11 => instr!("ld de, d16", 3, load_wide_register, InstructionData::new().wide_dst(WideRegister::DE).immediate_16()),
+            0x12 => instr!("ld de, a", 2, write_to_memory, InstructionData::new().wide_src(WideRegister::DE).small_src(SmallRegister::A)),
             0x13 => todo!(),
-            0x14 => instr!("inc D", 1, inc_small_register, InstructionData::new().small_dst(SmallRegister::D)),
+            0x14 => instr!("inc d", 1, inc, InstructionData::new().small_dst(SmallRegister::D)),
             0x15 => todo!(),
             0x16 => todo!(),
             0x17 => todo!(),
@@ -191,15 +238,15 @@ impl Instruction {
             0x19 => todo!(),
             0x1A => todo!(),
             0x1B => todo!(),
-            0x1C => instr!("inc E", 1, inc_small_register, InstructionData::new().small_dst(SmallRegister::E)),
+            0x1C => instr!("inc E", 1, inc, InstructionData::new().small_dst(SmallRegister::E)),
             0x1D => todo!(),
             0x1E => todo!(),
             0x1F => todo!(),
             0x20 => todo!(),
-            0x21 => todo!(),
+            0x21 => instr!("ld hl, d16", 3, load_wide_register, InstructionData::new().wide_dst(WideRegister::HL).immediate_16()),
             0x22 => todo!(),
             0x23 => todo!(),
-            0x24 => instr!("inc H", 1, inc_small_register, InstructionData::new().small_dst(SmallRegister::H)),
+            0x24 => instr!("inc H", 1, inc, InstructionData::new().small_dst(SmallRegister::H)),
             0x25 => todo!(),
             0x26 => todo!(),
             0x27 => todo!(),
@@ -207,12 +254,12 @@ impl Instruction {
             0x29 => todo!(),
             0x2A => todo!(),
             0x2B => todo!(),
-            0x2C => instr!("inc L", 1, inc_small_register, InstructionData::new().small_dst(SmallRegister::L)),
+            0x2C => instr!("inc L", 1, inc, InstructionData::new().small_dst(SmallRegister::L)),
             0x2D => todo!(),
             0x2E => todo!(),
             0x2F => todo!(),
             0x30 => todo!(),
-            0x31 => todo!(),
+            0x31 => instr!("ld sp, d16", 3, load_wide_register, InstructionData::new().wide_dst(WideRegister::SP).immediate_16()),
             0x32 => todo!(),
             0x33 => todo!(),
             0x34 => todo!(),
@@ -223,58 +270,58 @@ impl Instruction {
             0x39 => todo!(),
             0x3A => todo!(),
             0x3B => todo!(),
-            0x3C => instr!("inc A", 1, inc_small_register, InstructionData::new().small_dst(SmallRegister::A)),
+            0x3C => instr!("inc A", 1, inc, InstructionData::new().small_dst(SmallRegister::A)),
             0x3D => todo!(),
             0x3E => todo!(),
             0x3F => todo!(),
-            0x40 => instr!("ld b b",  1, load_register, InstructionData::new().small_src(SmallRegister::B).small_dst(SmallRegister::B)),
-            0x41 => instr!("ld b c",  1, load_register, InstructionData::new().small_src(SmallRegister::C).small_dst(SmallRegister::B)),
-            0x42 => instr!("ld b d",  1, load_register, InstructionData::new().small_src(SmallRegister::D).small_dst(SmallRegister::B)),
-            0x43 => instr!("ld b e",  1, load_register, InstructionData::new().small_src(SmallRegister::E).small_dst(SmallRegister::B)),
-            0x44 => instr!("ld b h",  1, load_register, InstructionData::new().small_src(SmallRegister::H).small_dst(SmallRegister::B)),
-            0x45 => instr!("ld b l",  1, load_register, InstructionData::new().small_src(SmallRegister::L).small_dst(SmallRegister::B)),
-            0x46 => instr!("ld b hl", 1, load_register, InstructionData::new().wide_src(WideRegister::HL).small_dst(SmallRegister::B)),
-            0x47 => instr!("ld b a",  1, load_register, InstructionData::new().small_src(SmallRegister::A).small_dst(SmallRegister::B)),
-            0x48 => instr!("ld c b",  1, load_register, InstructionData::new().small_src(SmallRegister::B).small_dst(SmallRegister::C)),
-            0x49 => instr!("ld c c",  1, load_register, InstructionData::new().small_src(SmallRegister::C).small_dst(SmallRegister::C)),
-            0x4A => instr!("ld c d",  1, load_register, InstructionData::new().small_src(SmallRegister::D).small_dst(SmallRegister::C)),
-            0x4B => instr!("ld c e",  1, load_register, InstructionData::new().small_src(SmallRegister::E).small_dst(SmallRegister::C)),
-            0x4C => instr!("ld c h",  1, load_register, InstructionData::new().small_src(SmallRegister::H).small_dst(SmallRegister::C)),
-            0x4D => instr!("ld c l",  1, load_register, InstructionData::new().small_src(SmallRegister::L).small_dst(SmallRegister::C)),
-            0x4E => instr!("ld c hl", 1, load_register, InstructionData::new().wide_src(WideRegister::HL).small_dst(SmallRegister::C)),
-            0x4F => instr!("ld c a",  1, load_register, InstructionData::new().small_src(SmallRegister::A).small_dst(SmallRegister::C)),
-            0x50 => instr!("ld d b",  1, load_register, InstructionData::new().small_src(SmallRegister::B).small_dst(SmallRegister::D)),
-            0x51 => instr!("ld d c",  1, load_register, InstructionData::new().small_src(SmallRegister::C).small_dst(SmallRegister::D)),
-            0x52 => instr!("ld d d",  1, load_register, InstructionData::new().small_src(SmallRegister::D).small_dst(SmallRegister::D)),
-            0x53 => instr!("ld d e",  1, load_register, InstructionData::new().small_src(SmallRegister::E).small_dst(SmallRegister::D)),
-            0x54 => instr!("ld d h",  1, load_register, InstructionData::new().small_src(SmallRegister::H).small_dst(SmallRegister::D)),
-            0x55 => instr!("ld d l",  1, load_register, InstructionData::new().small_src(SmallRegister::L).small_dst(SmallRegister::D)),
-            0x56 => instr!("ld d hl", 1, load_register, InstructionData::new().wide_src(WideRegister::HL).small_dst(SmallRegister::D)),
-            0x57 => instr!("ld d a",  1, load_register, InstructionData::new().small_src(SmallRegister::A).small_dst(SmallRegister::D)),
-            0x58 => instr!("ld e b",  1, load_register, InstructionData::new().small_src(SmallRegister::B).small_dst(SmallRegister::E)),
-            0x59 => instr!("ld e c",  1, load_register, InstructionData::new().small_src(SmallRegister::C).small_dst(SmallRegister::E)),
-            0x5A => instr!("ld e d",  1, load_register, InstructionData::new().small_src(SmallRegister::D).small_dst(SmallRegister::E)),
-            0x5B => instr!("ld e e",  1, load_register, InstructionData::new().small_src(SmallRegister::E).small_dst(SmallRegister::E)),
-            0x5C => instr!("ld e h",  1, load_register, InstructionData::new().small_src(SmallRegister::H).small_dst(SmallRegister::E)),
-            0x5D => instr!("ld e l",  1, load_register, InstructionData::new().small_src(SmallRegister::L).small_dst(SmallRegister::E)),
-            0x5E => instr!("ld e hl", 1, load_register, InstructionData::new().wide_src(WideRegister::HL).small_dst(SmallRegister::E)),
-            0x5F => instr!("ld e a",  1, load_register, InstructionData::new().small_src(SmallRegister::A).small_dst(SmallRegister::E)),
-            0x60 => instr!("ld h b",  1, load_register, InstructionData::new().small_src(SmallRegister::B).small_dst(SmallRegister::H)),
-            0x61 => instr!("ld h c",  1, load_register, InstructionData::new().small_src(SmallRegister::C).small_dst(SmallRegister::H)),
-            0x62 => instr!("ld h d",  1, load_register, InstructionData::new().small_src(SmallRegister::D).small_dst(SmallRegister::H)),
-            0x63 => instr!("ld h e",  1, load_register, InstructionData::new().small_src(SmallRegister::E).small_dst(SmallRegister::H)),
-            0x64 => instr!("ld h h",  1, load_register, InstructionData::new().small_src(SmallRegister::H).small_dst(SmallRegister::H)),
-            0x65 => instr!("ld h l",  1, load_register, InstructionData::new().small_src(SmallRegister::L).small_dst(SmallRegister::H)),
-            0x66 => instr!("ld h hl", 1, load_register, InstructionData::new().wide_src(WideRegister::HL).small_dst(SmallRegister::H)),
-            0x67 => instr!("ld h a",  1, load_register, InstructionData::new().small_src(SmallRegister::A).small_dst(SmallRegister::H)),
-            0x68 => instr!("ld l b",  1, load_register, InstructionData::new().small_src(SmallRegister::B).small_dst(SmallRegister::L)),
-            0x69 => instr!("ld l c",  1, load_register, InstructionData::new().small_src(SmallRegister::C).small_dst(SmallRegister::L)),
-            0x6A => instr!("ld l d",  1, load_register, InstructionData::new().small_src(SmallRegister::D).small_dst(SmallRegister::L)),
-            0x6B => instr!("ld l e",  1, load_register, InstructionData::new().small_src(SmallRegister::E).small_dst(SmallRegister::L)),
-            0x6C => instr!("ld l h",  1, load_register, InstructionData::new().small_src(SmallRegister::H).small_dst(SmallRegister::L)),
-            0x6D => instr!("ld l l",  1, load_register, InstructionData::new().small_src(SmallRegister::L).small_dst(SmallRegister::L)),
-            0x6E => instr!("ld l hl", 1, load_register, InstructionData::new().wide_src(WideRegister::HL).small_dst(SmallRegister::L)),
-            0x6F => instr!("ld l a",  1, load_register, InstructionData::new().small_src(SmallRegister::A).small_dst(SmallRegister::L)),
+            0x40 => instr!("ld b b",  1, load_small_register, InstructionData::new().small_src(SmallRegister::B).small_dst(SmallRegister::B)),
+            0x41 => instr!("ld b c",  1, load_small_register, InstructionData::new().small_src(SmallRegister::C).small_dst(SmallRegister::B)),
+            0x42 => instr!("ld b d",  1, load_small_register, InstructionData::new().small_src(SmallRegister::D).small_dst(SmallRegister::B)),
+            0x43 => instr!("ld b e",  1, load_small_register, InstructionData::new().small_src(SmallRegister::E).small_dst(SmallRegister::B)),
+            0x44 => instr!("ld b h",  1, load_small_register, InstructionData::new().small_src(SmallRegister::H).small_dst(SmallRegister::B)),
+            0x45 => instr!("ld b l",  1, load_small_register, InstructionData::new().small_src(SmallRegister::L).small_dst(SmallRegister::B)),
+            0x46 => instr!("ld b hl", 1, load_small_register, InstructionData::new().wide_src(WideRegister::HL).small_dst(SmallRegister::B)),
+            0x47 => instr!("ld b a",  1, load_small_register, InstructionData::new().small_src(SmallRegister::A).small_dst(SmallRegister::B)),
+            0x48 => instr!("ld c b",  1, load_small_register, InstructionData::new().small_src(SmallRegister::B).small_dst(SmallRegister::C)),
+            0x49 => instr!("ld c c",  1, load_small_register, InstructionData::new().small_src(SmallRegister::C).small_dst(SmallRegister::C)),
+            0x4A => instr!("ld c d",  1, load_small_register, InstructionData::new().small_src(SmallRegister::D).small_dst(SmallRegister::C)),
+            0x4B => instr!("ld c e",  1, load_small_register, InstructionData::new().small_src(SmallRegister::E).small_dst(SmallRegister::C)),
+            0x4C => instr!("ld c h",  1, load_small_register, InstructionData::new().small_src(SmallRegister::H).small_dst(SmallRegister::C)),
+            0x4D => instr!("ld c l",  1, load_small_register, InstructionData::new().small_src(SmallRegister::L).small_dst(SmallRegister::C)),
+            0x4E => instr!("ld c hl", 1, load_small_register, InstructionData::new().wide_src(WideRegister::HL).small_dst(SmallRegister::C)),
+            0x4F => instr!("ld c a",  1, load_small_register, InstructionData::new().small_src(SmallRegister::A).small_dst(SmallRegister::C)),
+            0x50 => instr!("ld d b",  1, load_small_register, InstructionData::new().small_src(SmallRegister::B).small_dst(SmallRegister::D)),
+            0x51 => instr!("ld d c",  1, load_small_register, InstructionData::new().small_src(SmallRegister::C).small_dst(SmallRegister::D)),
+            0x52 => instr!("ld d d",  1, load_small_register, InstructionData::new().small_src(SmallRegister::D).small_dst(SmallRegister::D)),
+            0x53 => instr!("ld d e",  1, load_small_register, InstructionData::new().small_src(SmallRegister::E).small_dst(SmallRegister::D)),
+            0x54 => instr!("ld d h",  1, load_small_register, InstructionData::new().small_src(SmallRegister::H).small_dst(SmallRegister::D)),
+            0x55 => instr!("ld d l",  1, load_small_register, InstructionData::new().small_src(SmallRegister::L).small_dst(SmallRegister::D)),
+            0x56 => instr!("ld d hl", 1, load_small_register, InstructionData::new().wide_src(WideRegister::HL).small_dst(SmallRegister::D)),
+            0x57 => instr!("ld d a",  1, load_small_register, InstructionData::new().small_src(SmallRegister::A).small_dst(SmallRegister::D)),
+            0x58 => instr!("ld e b",  1, load_small_register, InstructionData::new().small_src(SmallRegister::B).small_dst(SmallRegister::E)),
+            0x59 => instr!("ld e c",  1, load_small_register, InstructionData::new().small_src(SmallRegister::C).small_dst(SmallRegister::E)),
+            0x5A => instr!("ld e d",  1, load_small_register, InstructionData::new().small_src(SmallRegister::D).small_dst(SmallRegister::E)),
+            0x5B => instr!("ld e e",  1, load_small_register, InstructionData::new().small_src(SmallRegister::E).small_dst(SmallRegister::E)),
+            0x5C => instr!("ld e h",  1, load_small_register, InstructionData::new().small_src(SmallRegister::H).small_dst(SmallRegister::E)),
+            0x5D => instr!("ld e l",  1, load_small_register, InstructionData::new().small_src(SmallRegister::L).small_dst(SmallRegister::E)),
+            0x5E => instr!("ld e hl", 1, load_small_register, InstructionData::new().wide_src(WideRegister::HL).small_dst(SmallRegister::E)),
+            0x5F => instr!("ld e a",  1, load_small_register, InstructionData::new().small_src(SmallRegister::A).small_dst(SmallRegister::E)),
+            0x60 => instr!("ld h b",  1, load_small_register, InstructionData::new().small_src(SmallRegister::B).small_dst(SmallRegister::H)),
+            0x61 => instr!("ld h c",  1, load_small_register, InstructionData::new().small_src(SmallRegister::C).small_dst(SmallRegister::H)),
+            0x62 => instr!("ld h d",  1, load_small_register, InstructionData::new().small_src(SmallRegister::D).small_dst(SmallRegister::H)),
+            0x63 => instr!("ld h e",  1, load_small_register, InstructionData::new().small_src(SmallRegister::E).small_dst(SmallRegister::H)),
+            0x64 => instr!("ld h h",  1, load_small_register, InstructionData::new().small_src(SmallRegister::H).small_dst(SmallRegister::H)),
+            0x65 => instr!("ld h l",  1, load_small_register, InstructionData::new().small_src(SmallRegister::L).small_dst(SmallRegister::H)),
+            0x66 => instr!("ld h hl", 1, load_small_register, InstructionData::new().wide_src(WideRegister::HL).small_dst(SmallRegister::H)),
+            0x67 => instr!("ld h a",  1, load_small_register, InstructionData::new().small_src(SmallRegister::A).small_dst(SmallRegister::H)),
+            0x68 => instr!("ld l b",  1, load_small_register, InstructionData::new().small_src(SmallRegister::B).small_dst(SmallRegister::L)),
+            0x69 => instr!("ld l c",  1, load_small_register, InstructionData::new().small_src(SmallRegister::C).small_dst(SmallRegister::L)),
+            0x6A => instr!("ld l d",  1, load_small_register, InstructionData::new().small_src(SmallRegister::D).small_dst(SmallRegister::L)),
+            0x6B => instr!("ld l e",  1, load_small_register, InstructionData::new().small_src(SmallRegister::E).small_dst(SmallRegister::L)),
+            0x6C => instr!("ld l h",  1, load_small_register, InstructionData::new().small_src(SmallRegister::H).small_dst(SmallRegister::L)),
+            0x6D => instr!("ld l l",  1, load_small_register, InstructionData::new().small_src(SmallRegister::L).small_dst(SmallRegister::L)),
+            0x6E => instr!("ld l hl", 1, load_small_register, InstructionData::new().wide_src(WideRegister::HL).small_dst(SmallRegister::L)),
+            0x6F => instr!("ld l a",  1, load_small_register, InstructionData::new().small_src(SmallRegister::A).small_dst(SmallRegister::L)),
             0x70 => todo!(),
             0x71 => todo!(),
             0x72 => todo!(),

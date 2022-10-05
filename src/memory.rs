@@ -32,6 +32,14 @@ impl GameBoyState {
     pub fn read_u16(&self, address: u16) -> u16 {
         (self.read_u8(address) as u16) << 8 | self.read_u8(address + 1) as u16
     }
+
+    pub fn write_u8(&mut self, address: u16, val: u8) {
+        match address {
+            0x0000..=0x7FFF => self.cart.bytes[address as usize] = val,
+            0x8000..=0x9FFF => todo!("Support video memeory"),
+            _ => panic!("Memory address not supported 0x{:x}", address),
+        }
+    }
 }
 
 impl RomChunk {
