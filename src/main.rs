@@ -16,9 +16,6 @@ type Result<T> = std::result::Result<T, Box<dyn error::Error>>;
 fn main() {
     env_logger::init();
     info!("starting up");
-    let mut gb = GameBoy::new(Some(
-        Path::new("rom/Tetris.gb"),
-    ))
-    .unwrap();
+    let mut gb = GameBoy::new(Some(Path::new("rom/Tetris.gb"))).unwrap();
     gb.run();
-  }
+}
