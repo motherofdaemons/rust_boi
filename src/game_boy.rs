@@ -1,6 +1,8 @@
 use crate::cpu::Cpu;
 use crate::memory::GameBoyState;
 
+use std::path::Path;
+
 use crate::Result;
 use log::trace;
 
@@ -10,7 +12,7 @@ pub struct GameBoy {
 }
 
 impl GameBoy {
-    pub fn new(rom_path: Option<&str>) -> Result<Self> {
+    pub fn new(rom_path: Option<&Path>) -> Result<Self> {
         trace!("Creating gameboy");
         Ok(Self {
             cpu: Cpu::new(),

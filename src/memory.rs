@@ -1,4 +1,4 @@
-use std::{fs::File, io::Read};
+use std::{fs::File, io::Read, path::Path};
 
 use crate::Result;
 
@@ -14,7 +14,7 @@ struct RomChunk {
 
 
 impl GameBoyState {
-    pub fn new(rom_path: Option<&str>) -> Result<Self> {
+    pub fn new(rom_path: Option<&Path>) -> Result<Self> {
         Ok(Self {
             boot: RomChunk::new(None)?,
             cart: RomChunk::new(rom_path)?,
@@ -43,15 +43,15 @@ impl GameBoyState {
 }
 
 impl RomChunk {
-    fn new(rom_path: Option<&str>) -> Result<Self> {
-        if rom_path.is_some() {
-            Self::from_file(rom_path.unwrap())
+    fn new(rom_path: Option<&Path>) -> Result<Self> {
+        if let Some(rom_path) = rom_path {
+            Self::from_file(rom_path)
         } else {
             Ok(Self { bytes: Vec::new() })
         }
     }
 
-    fn from_file(file_path: &str) -> Result<Self> {
+    fn from_file(file_path: &Path) -> Result<Self> {
         let mut f = File::open(file_path)?;
         let mut buffer = Vec::new();
         f.read_to_end(&mut buffer)?;

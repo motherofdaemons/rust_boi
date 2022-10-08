@@ -14,7 +14,7 @@ pub struct RegisterPair {
     pub r: u8,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SmallRegister {
     B,
     C,
@@ -26,7 +26,7 @@ pub enum SmallRegister {
     L,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WideRegister {
     PC,
     SP,
@@ -68,17 +68,17 @@ impl Registers {
         carry: Option<bool>,
     ) {
         let mut flags = self.read_r8(SmallRegister::F);
-        if zero.is_some() {
-            flags = Registers::set_bit_flag(flags, ZERO_FLAG, zero.unwrap());
+        if let Some(zero) = zero {
+            flags = Registers::set_bit_flag(flags, ZERO_FLAG, zero);
         }
-        if subtract.is_some() {
-            flags = Registers::set_bit_flag(flags, SUBTRACT_FLAG, subtract.unwrap());
+        if let Some(subtract) = subtract {
+            flags = Registers::set_bit_flag(flags, SUBTRACT_FLAG, subtract);
         }
-        if half_carry.is_some() {
-            flags = Registers::set_bit_flag(flags, HALF_CARRY_FLAG, half_carry.unwrap());
+        if let Some(half_carry) = half_carry {
+            flags = Registers::set_bit_flag(flags, HALF_CARRY_FLAG, half_carry);
         }
-        if carry.is_some() {
-            flags = Registers::set_bit_flag(flags, CARRY_FLAG, carry.unwrap());
+        if let Some(carry) = carry {
+            flags = Registers::set_bit_flag(flags, CARRY_FLAG, carry);
         }
         self.write_r8(SmallRegister::F, flags);
     }
@@ -136,20 +136,19 @@ impl Registers {
             WideRegister::HL => self.hl = RegisterPair::from(val),
         }
     }
-
-}
-
-impl Into<u16> for RegisterPair {
-    fn into(self) -> u16 {
-        (self.l as u16) << 8 | self.r as u16
-    }
 }
 
 impl From<u16> for RegisterPair {
-    fn from(val: u16) -> Self {
+    fn from(val: u16) -> RegisterPair {
         Self {
             l: (val >> 8) as u8,
             r: (val & 0xFF) as u8,
         }
+    }
+}
+
+impl From<RegisterPair> for u16 {
+    fn from(val: RegisterPair) -> u16 {
+        (val.l as u16) << 8 | val.r as u16
     }
 }
