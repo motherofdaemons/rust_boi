@@ -201,6 +201,7 @@ impl Instruction {
         }
     }
 
+    #[rustfmt::skip]
     fn from_byte_prefixed(byte: u8) -> Option<Instruction> {
         match byte {
             0x00 => todo!(),
