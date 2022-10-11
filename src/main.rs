@@ -7,7 +7,7 @@ mod registers;
 
 use log::info;
 
-use crate::game_boy::GameBoy;
+use crate::{game_boy::GameBoy, memory::RomChunk};
 
 use std::{error, path::Path};
 
@@ -16,6 +16,8 @@ type Result<T> = std::result::Result<T, Box<dyn error::Error>>;
 fn main() {
     env_logger::init();
     info!("starting up");
-    let mut gb = GameBoy::new(Some(Path::new("roms/Tetris.gb"))).unwrap();
+    let boot_rom = RomChunk::new(Some(Path::new("roms/dmg_rom.bin"))).unwrap();
+    let cart_rom = RomChunk::new(Some(Path::new("roms/Tetris.gb"))).unwrap();
+    let mut gb = GameBoy::new(boot_rom, cart_rom);
     gb.run();
 }

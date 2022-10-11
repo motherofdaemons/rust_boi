@@ -1,6 +1,6 @@
 use crate::registers::{SmallRegister, WideRegister};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct InstructionData {
     pub flag_mask: Option<u8>,
     pub flag_expected: Option<u8>,
@@ -8,8 +8,7 @@ pub struct InstructionData {
     pub small_reg_dst: Option<SmallRegister>,
     pub wide_reg_src: Option<WideRegister>,
     pub wide_reg_dst: Option<WideRegister>,
-    pub immediate_16: bool,
-    pub immediate_8: bool,
+    pub code: Option<u8>,
 }
 
 impl InstructionData {
@@ -21,8 +20,7 @@ impl InstructionData {
             small_reg_dst: None,
             wide_reg_src: None,
             wide_reg_dst: None,
-            immediate_16: false,
-            immediate_8: false,
+            code: None,
         }
     }
     pub const fn small_src(mut self, src: SmallRegister) -> Self {
@@ -51,13 +49,8 @@ impl InstructionData {
         self
     }
 
-    pub const fn immediate_16(mut self) -> Self {
-        self.immediate_16 = true;
-        self
-    }
-
-    pub const fn immediate_8(mut self) -> Self {
-        self.immediate_8 = true;
+        pub const fn rst_code(mut self, code: u8) -> Self {
+        self.code = Some(code);
         self
     }
 }

@@ -1,9 +1,6 @@
 use crate::cpu::Cpu;
-use crate::memory::GameBoyState;
+use crate::memory::{GameBoyState, RomChunk};
 
-use std::path::Path;
-
-use crate::Result;
 use log::trace;
 
 pub struct GameBoy {
@@ -12,19 +9,19 @@ pub struct GameBoy {
 }
 
 impl GameBoy {
-    pub fn new(rom_path: Option<&Path>) -> Result<Self> {
+    pub fn new(boot_rom: RomChunk, cart_rom: RomChunk) -> Self {
         trace!("Creating gameboy");
-        Ok(Self {
+        Self {
             cpu: Cpu::new(),
-            memory: GameBoyState::new(rom_path)?,
-        })
+            memory: GameBoyState::new(boot_rom, cart_rom),
+        }
     }
 
     pub fn run(&mut self) {
         trace!("starting run");
         loop {
             self.step();
-            // std::thread::sleep(std::time::Duration::from_secs(1));
+            std::thread::sleep(std::time::Duration::from_millis(500));
         }
     }
 
