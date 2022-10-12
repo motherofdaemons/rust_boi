@@ -157,6 +157,11 @@ impl Registers {
         self.sp += 2;
         value
     }
+    pub fn stack_peek16(&self, memory: &GameBoyState) -> u16 {
+        let lower = memory.read_u8(self.sp);
+        let upper = memory.read_u8(self.sp + 1);
+        ((upper as u16) << 8) | (lower as u16)
+    }
 }
 
 impl From<u16> for RegisterPair {

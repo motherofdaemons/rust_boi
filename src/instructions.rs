@@ -144,6 +144,13 @@ fn ldd_mem_wide_reg_small_reg(
         .wrapping_sub(1);
     memory.write_u8(address, value);
 }
+fn ld_mem_imm16_sp(registers: &mut Registers, memory: &mut GameBoyState, _additional: &InstructionData) {
+    registers.inc_pc(1);
+    let value = registers.stack_peek16(memory);
+    let address = memory.read_u16(registers.get_pc());
+    registers.inc_pc(2);
+    memory.write_u16(address, value);
+}
 //Bit logic funcitons
 fn and(registers: &mut Registers, memory: &mut GameBoyState, additional: &InstructionData) {
     registers.inc_pc(1);
@@ -690,13 +697,13 @@ impl Instruction {
             0x05 => instr!(byte, "dec b", 1, dec_small_reg, InstructionData::new().small_dst(SmallRegister::B)),
             0x06 => instr!(byte, "ld b, d8", 2, ld_small_reg_imm8, InstructionData::new().small_dst(SmallRegister::B)),
             0x07 => None,
-            0x08 => None,
+            0x08 => instr!(byte, "ld (a16), sp", 5, ld_mem_imm16_sp, InstructionData::new()),
             0x09 => None,
             0x0A => None,
             0x0B => instr!(byte, "dec bc", 2, dec_wide_reg, InstructionData::new().wide_dst(WideRegister::BC)),
             0x0C => instr!(byte, "inc c", 1, inc_small_reg, InstructionData::new().small_dst(SmallRegister::C)),
             0x0D => instr!(byte, "dec c", 1, dec_small_reg, InstructionData::new().small_dst(SmallRegister::C)),
-            0x0E => None,
+            0x0E => instr!(byte, "ld c, d8", 2, ld_small_reg_imm8, InstructionData::new().small_dst(SmallRegister::C)),
             0x0F => None,
             0x10 => None,
             0x11 => instr!(byte, "ld de, d16", 3, ld_wide_reg_imm16, InstructionData::new().wide_dst(WideRegister::DE)),
@@ -704,7 +711,7 @@ impl Instruction {
             0x13 => instr!(byte, "inc de", 2, inc_wide_reg, InstructionData::new().wide_dst(WideRegister::DE)),
             0x14 => instr!(byte, "inc d", 1, inc_small_reg, InstructionData::new().small_dst(SmallRegister::D)),
             0x15 => instr!(byte, "dec d", 1, dec_small_reg, InstructionData::new().small_dst(SmallRegister::D)),
-            0x16 => None,
+            0x16 => instr!(byte, "ld d, d8", 2, ld_small_reg_imm8, InstructionData::new().small_dst(SmallRegister::D)),
             0x17 => None,
             0x18 => instr!(byte, "jr s8", 3, jump_relative_immediate, InstructionData::new().with_flags(0, 0)),
             0x19 => None,
@@ -712,7 +719,7 @@ impl Instruction {
             0x1B => instr!(byte, "dec de", 2, dec_wide_reg, InstructionData::new().wide_dst(WideRegister::DE)),
             0x1C => instr!(byte, "inc e", 1, inc_small_reg, InstructionData::new().small_dst(SmallRegister::E)),
             0x1D => instr!(byte, "dec e", 1, dec_small_reg, InstructionData::new().small_dst(SmallRegister::E)),
-            0x1E => None,
+            0x1E => instr!(byte, "ld e, d8", 2, ld_small_reg_imm8, InstructionData::new().small_dst(SmallRegister::E)),
             0x1F => None,
             0x20 => instr!(byte, "jr nz, s8", 3, jump_relative_immediate, InstructionData::new().with_flags(ZERO_FLAG, 0)),
             0x21 => instr!(byte, "ld hl, d16", 3, ld_wide_reg_imm16, InstructionData::new().wide_dst(WideRegister::HL)),
@@ -720,7 +727,7 @@ impl Instruction {
             0x23 => instr!(byte, "inc hl", 2, inc_wide_reg, InstructionData::new().wide_dst(WideRegister::HL)),
             0x24 => instr!(byte, "inc h", 1, inc_small_reg, InstructionData::new().small_dst(SmallRegister::H)),
             0x25 => instr!(byte, "dec h", 1, dec_small_reg, InstructionData::new().small_dst(SmallRegister::H)),
-            0x26 => None,
+            0x26 => instr!(byte, "ld h, d8", 2, ld_small_reg_imm8, InstructionData::new().small_dst(SmallRegister::H)),
             0x27 => None,
             0x28 => instr!(byte, "jr z, s8", 3, jump_relative_immediate, InstructionData::new().with_flags(ZERO_FLAG, ZERO_FLAG)),
             0x29 => None,
@@ -728,7 +735,7 @@ impl Instruction {
             0x2B => instr!(byte, "dec hl", 2, dec_wide_reg, InstructionData::new().wide_dst(WideRegister::HL)),
             0x2C => instr!(byte, "inc l", 1, inc_small_reg, InstructionData::new().small_dst(SmallRegister::L)),
             0x2D => instr!(byte, "dec l", 1, dec_small_reg, InstructionData::new().small_dst(SmallRegister::L)),
-            0x2E => None,
+            0x2E => instr!(byte, "ld l, d8", 2, ld_small_reg_imm8, InstructionData::new().small_dst(SmallRegister::L)),
             0x2F => None,
             0x30 => instr!(byte, "jr nc, s8", 3, jump_relative_immediate, InstructionData::new().with_flags(CARRY_FLAG, 0)),
             0x31 => instr!(byte, "ld sp, d16", 3, ld_wide_reg_imm16, InstructionData::new().wide_dst(WideRegister::SP)),
@@ -744,7 +751,7 @@ impl Instruction {
             0x3B => instr!(byte, "dec sp", 2, dec_wide_reg, InstructionData::new().wide_dst(WideRegister::SP)),
             0x3C => instr!(byte, "inc a", 1, inc_small_reg, InstructionData::new().small_dst(SmallRegister::A)),
             0x3D => instr!(byte, "dec a", 1, dec_small_reg, InstructionData::new().small_dst(SmallRegister::A)),
-            0x3E => None,
+            0x3E => instr!(byte, "ld a, d8", 2, ld_small_reg_imm8, InstructionData::new().small_dst(SmallRegister::A)),
             0x3F => None,
             0x40 => instr!(byte, "ld b, b",  1, ld_small_reg_small_reg, InstructionData::new().small_src(SmallRegister::B).small_dst(SmallRegister::B)),
             0x41 => instr!(byte, "ld b, c",  1, ld_small_reg_small_reg, InstructionData::new().small_src(SmallRegister::C).small_dst(SmallRegister::B)),

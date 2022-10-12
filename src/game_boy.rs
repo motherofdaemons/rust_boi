@@ -21,7 +21,7 @@ impl GameBoy {
         trace!("starting run");
         loop {
             self.step();
-            std::thread::sleep(std::time::Duration::from_millis(500));
+            std::thread::sleep(std::time::Duration::from_millis(100));
         }
     }
 
