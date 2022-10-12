@@ -19,6 +19,7 @@ impl Cpu {
         let prefixed = opcode == 0xCB;
         if prefixed {
             opcode = memory.read_u8(self.registers.get_pc() + 1);
+            self.registers.inc_pc(1);
         }
 
         if let Some(instruction) = Instruction::from_byte(opcode, prefixed) {

@@ -23,7 +23,8 @@ const BOOT_ROM_ADDRESS: u16 = 0xFF50;
 
 pub struct GameBoyState {
     boot: RomChunk,
-    cart: RomChunk,
+    cart_bank_0: RomChunk,
+    cart_bank_n: RomChunk,
     cart_ram: RamChunk,
     vram: RamChunk,
     iram: RamChunk,
@@ -41,9 +42,19 @@ struct RamChunk {
 
 impl GameBoyState {
     pub fn new(boot: RomChunk, cart: RomChunk) -> Self {
+        // Split the cart into the fixed and variable banks
+        let mut cart_bank_0 = RomChunk::new_empty(ROM_BANK_SIZE);
+        for i in 0..ROM_BANK_SIZE {
+            cart_bank_0.bytes[i] = cart.bytes[i];
+        }
+        let mut cart_bank_n = RomChunk::new_empty(ROM_BANK_SIZE);
+        for i in 0..ROM_BANK_SIZE {
+            cart_bank_n.bytes[i] = cart.bytes[i + ROM_BANK_SIZE];
+        }
         Self {
             boot,
-            cart,
+            cart_bank_0,
+            cart_bank_n,
             cart_ram: RamChunk::new(RAM_BANK_SIZE * 4),
             vram: RamChunk::new(RAM_BANK_SIZE),
             iram: RamChunk::new(RAM_BANK_SIZE),
@@ -55,16 +66,16 @@ impl GameBoyState {
     pub fn read_u8(&self, address: u16) -> u8 {
         match address {
             START_OF_FIXED_ROM..=END_OF_FIXED_ROM => {
-                if self.boot_enabled {
+                if self.boot_enabled && address < END_OF_BOOT {
                     self.boot.read_u8(address)
                 } else {
-                    self.cart.read_u8(address)
+                    self.cart_bank_0.read_u8(address)
                 }
             }
-            START_OF_BANKED_ROM..=END_OF_BANKED_ROM => todo!(),
-            START_OF_VRAM..=END_OF_VRAM => todo!(),
-            START_OF_CARTRIDGE_RAM..=END_OF_CARTRIDGE_RAM => todo!(),
-            START_OF_INTERNAL_RAM..=END_OF_INTERNAL_RAM => todo!(),
+            START_OF_BANKED_ROM..=END_OF_BANKED_ROM => self.cart_bank_n.read_u8(address - START_OF_BANKED_ROM),
+            START_OF_VRAM..=END_OF_VRAM => self.vram.read_u8(address - START_OF_VRAM),
+            START_OF_CARTRIDGE_RAM..=END_OF_CARTRIDGE_RAM => self.cart_ram.read_u8(address - START_OF_CARTRIDGE_RAM),
+            START_OF_INTERNAL_RAM..=END_OF_INTERNAL_RAM => self.iram.read_u8(address - START_OF_INTERNAL_RAM),
             START_OF_ECHO_RAM..=END_OF_ECHO_RAM => todo!(),
             _ => self.high_ram.read_u8(address - END_OF_ECHO_RAM),
         }
@@ -80,13 +91,13 @@ impl GameBoyState {
                 if self.boot_enabled && address < END_OF_BOOT {
                     self.boot.write_u8(address, value);
                 } else {
-                    self.cart.write_u8(address, value);
+                    self.cart_bank_0.write_u8(address, value);
                 }
             }
-            START_OF_BANKED_ROM..=END_OF_BANKED_ROM => todo!(),
-            START_OF_VRAM..=END_OF_VRAM => todo!(),
-            START_OF_CARTRIDGE_RAM..=END_OF_CARTRIDGE_RAM => todo!(),
-            START_OF_INTERNAL_RAM..=END_OF_INTERNAL_RAM => todo!(),
+            START_OF_BANKED_ROM..=END_OF_BANKED_ROM => self.cart_bank_n.write_u8(address - START_OF_BANKED_ROM, value),
+            START_OF_VRAM..=END_OF_VRAM => self.vram.write_u8(address - START_OF_VRAM, value),
+            START_OF_CARTRIDGE_RAM..=END_OF_CARTRIDGE_RAM => self.cart_ram.write_u8(address - START_OF_CARTRIDGE_RAM, value),
+            START_OF_INTERNAL_RAM..=END_OF_INTERNAL_RAM => self.iram.write_u8(address - START_OF_INTERNAL_RAM, value),
             START_OF_ECHO_RAM..=END_OF_ECHO_RAM => todo!(),
             _ => self.write_high_mem(address, value),
         }
@@ -114,6 +125,12 @@ impl RomChunk {
             Self::from_file(rom_path)
         } else {
             Ok(Self { bytes: Vec::new() })
+        }
+    }
+
+    fn new_empty(size: usize) -> Self {
+        Self {
+            bytes: vec![0; size],
         }
     }
 

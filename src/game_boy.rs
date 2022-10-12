@@ -23,9 +23,7 @@ impl GameBoy {
         trace!("starting run");
         loop {
             self.step();
-            println!("Press enter for next instruction");
-            std::io::stdin().read(&mut [0]);
-            // std::thread::sleep(std::time::Duration::from_millis(100));
+            // std::thread::sleep(std::time::Duration::from_millis(10));
         }
     }
 

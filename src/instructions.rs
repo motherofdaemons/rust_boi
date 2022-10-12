@@ -3,7 +3,7 @@ use std::fmt::Display;
 
 use crate::instruction_data::InstructionData;
 use crate::memory::GameBoyState;
-use crate::registers::{Registers, SmallRegister, WideRegister, ZERO_FLAG, CARRY_FLAG};
+use crate::registers::{Registers, SmallRegister, WideRegister, CARRY_FLAG, ZERO_FLAG};
 
 pub struct Instruction {
     pub opcode: u8,
@@ -74,9 +74,14 @@ pub fn jump_relative_immediate(
     {
         //Get the relative jump we want to make and make it
         let rel = memory.read_u8(registers.get_pc());
+        let neg = rel & 0x80 == 0x80;
+        let pc = registers.get_pc();
         //Not sure if this should wrap around but I assume it can
         //Should probably google this more
-        let new_pc = registers.get_pc().wrapping_add(rel as u16);
+        let new_pc = match neg {
+            true => pc.wrapping_sub(!rel as u16),
+            false => pc.wrapping_add(rel as u16),
+        };
         registers.set_pc(new_pc);
     } else {
         //If we don't follow the jump advance pc by one more
@@ -139,17 +144,43 @@ fn ldd_mem_wide_reg_small_reg(
 ) {
     registers.inc_pc(1);
     let value = registers.read_r8(additional.small_reg_src.unwrap());
-    let address = registers
-        .read_r16(additional.wide_reg_dst.unwrap())
-        .wrapping_sub(1);
+    let address = registers.read_r16(additional.wide_reg_dst.unwrap());
     memory.write_u8(address, value);
+    registers.write_r16(additional.wide_reg_dst.unwrap(), address.wrapping_sub(1));
 }
-fn ld_mem_imm16_sp(registers: &mut Registers, memory: &mut GameBoyState, _additional: &InstructionData) {
+fn ld_mem_imm16_sp(
+    registers: &mut Registers,
+    memory: &mut GameBoyState,
+    _additional: &InstructionData,
+) {
     registers.inc_pc(1);
     let value = registers.stack_peek16(memory);
     let address = memory.read_u16(registers.get_pc());
     registers.inc_pc(2);
     memory.write_u16(address, value);
+}
+
+fn ld_ff00_imm8_small_reg(
+    registers: &mut Registers,
+    memory: &mut GameBoyState,
+    additional: &InstructionData,
+) {
+    registers.inc_pc(1);
+    let address = 0xFF00 + memory.read_u8(registers.get_pc()) as u16;
+    registers.inc_pc(1);
+    let value = registers.read_r8(additional.small_reg_src.unwrap());
+    memory.write_u8(address, value);
+}
+
+fn ld_ff00_small_reg_small_reg(
+    registers: &mut Registers,
+    memory: &mut GameBoyState,
+    additional: &InstructionData,
+) {
+    registers.inc_pc(1);
+    let value = registers.read_r8(additional.small_reg_src.unwrap());
+    let address = 0xFF00 + registers.read_r8(additional.small_reg_dst.unwrap()) as u16;
+    memory.write_u8(address, value);
 }
 //Bit logic funcitons
 fn and(registers: &mut Registers, memory: &mut GameBoyState, additional: &InstructionData) {
@@ -169,21 +200,30 @@ fn and(registers: &mut Registers, memory: &mut GameBoyState, additional: &Instru
     }
 }
 
-fn xor(registers: &mut Registers, memory: &mut GameBoyState, additional: &InstructionData) {
+fn xor_small_reg(
+    registers: &mut Registers,
+    memory: &mut GameBoyState,
+    additional: &InstructionData,
+) {
     registers.inc_pc(1);
-    if let Some(reg) = additional.small_reg_src {
-        let res = registers.read_r8(SmallRegister::A) ^ registers.read_r8(reg);
-        registers.write_r8(SmallRegister::A, res);
-        registers.set_flags(Some(res == 0), Some(false), Some(false), Some(false));
-    } else if let Some(reg) = additional.wide_reg_src {
-        let address = registers.read_r16(reg);
-        let value = memory.read_u8(address);
-        let res = registers.read_r8(SmallRegister::A) ^ value;
-        registers.write_r8(SmallRegister::A, res);
-        registers.set_flags(Some(res == 0), Some(false), Some(false), Some(false));
-    } else {
-        panic!("Didn't know how to handle xor with {:?}", additional);
-    }
+    let reg = additional.small_reg_src.unwrap();
+    let res = registers.read_r8(SmallRegister::A) ^ registers.read_r8(reg);
+    registers.write_r8(SmallRegister::A, res);
+    registers.set_flags(Some(res == 0), Some(false), Some(false), Some(false));
+}
+
+fn xor_mem_wide_reg(
+    registers: &mut Registers,
+    memory: &mut GameBoyState,
+    additional: &InstructionData,
+) {
+    registers.inc_pc(1);
+    let reg = additional.wide_reg_src.unwrap();
+    let address = registers.read_r16(reg);
+    let value = memory.read_u8(address);
+    let res = registers.read_r8(SmallRegister::A) ^ value;
+    registers.write_r8(SmallRegister::A, res);
+    registers.set_flags(Some(res == 0), Some(false), Some(false), Some(false));
 }
 
 fn or(registers: &mut Registers, memory: &mut GameBoyState, additional: &InstructionData) {
@@ -274,7 +314,11 @@ fn add_carry(registers: &mut Registers, memory: &mut GameBoyState, additional: &
     );
 }
 
-fn inc_small_reg(registers: &mut Registers, memory: &mut GameBoyState, additional: &InstructionData) {
+fn inc_small_reg(
+    registers: &mut Registers,
+    memory: &mut GameBoyState,
+    additional: &InstructionData,
+) {
     registers.inc_pc(1);
     let reg = additional.small_reg_dst.unwrap();
     let value = registers.read_r8(reg);
@@ -288,7 +332,11 @@ fn inc_small_reg(registers: &mut Registers, memory: &mut GameBoyState, additiona
     );
 }
 
-fn inc_wide_reg(registers: &mut Registers, memory: &mut GameBoyState, additional: &InstructionData) {
+fn inc_wide_reg(
+    registers: &mut Registers,
+    memory: &mut GameBoyState,
+    additional: &InstructionData,
+) {
     registers.inc_pc(1);
     let reg = additional.wide_reg_dst.unwrap();
     let value = registers.read_r16(reg);
@@ -337,7 +385,11 @@ fn sub_carry(registers: &mut Registers, memory: &mut GameBoyState, additional: &
     );
 }
 
-fn dec_small_reg(registers: &mut Registers, _memory: &mut GameBoyState, additional: &InstructionData) {
+fn dec_small_reg(
+    registers: &mut Registers,
+    _memory: &mut GameBoyState,
+    additional: &InstructionData,
+) {
     registers.inc_pc(1);
     let reg = additional.small_reg_dst.unwrap();
     let value = registers.read_r8(reg);
@@ -351,7 +403,11 @@ fn dec_small_reg(registers: &mut Registers, _memory: &mut GameBoyState, addition
     );
 }
 
-fn dec_wide_reg(registers: &mut Registers, memory: &mut GameBoyState, additional: &InstructionData) {
+fn dec_wide_reg(
+    registers: &mut Registers,
+    memory: &mut GameBoyState,
+    additional: &InstructionData,
+) {
     registers.inc_pc(1);
     let reg = additional.wide_reg_dst.unwrap();
     let value = registers.read_r16(reg);
@@ -371,17 +427,41 @@ fn rst_n(registers: &mut Registers, memory: &mut GameBoyState, additional: &Inst
     registers.set_pc(additional.code.unwrap() as u16);
 }
 
+fn push_wide_reg(
+    registers: &mut Registers,
+    memory: &mut GameBoyState,
+    additional: &InstructionData,
+) {
+    registers.inc_pc(1);
+    let value = registers.read_r16(additional.wide_reg_src.unwrap());
+    registers.stack_push16(value, memory);
+}
+
 fn call(registers: &mut Registers, memory: &mut GameBoyState, additional: &InstructionData) {
     registers.inc_pc(1);
     let address = memory.read_u16(registers.get_pc());
     registers.inc_pc(2);
-    if (registers.get_flags() & additional.flag_mask.unwrap()) == additional.flag_expected.unwrap() {
+    if (registers.get_flags() & additional.flag_mask.unwrap()) == additional.flag_expected.unwrap()
+    {
         registers.stack_push16(registers.get_pc(), memory);
         registers.set_pc(address);
     }
 }
 
 // Extended fucntion table functions
+fn ext_rl_small_reg(
+    registers: &mut Registers,
+    memory: &mut GameBoyState,
+    additional: &InstructionData,
+) {
+    registers.inc_pc(1);
+    let reg = additional.small_reg_dst.unwrap();
+    let value = registers.read_r8(reg);
+    let new_carry = (value & 0x80) >> 7 == 0b1;
+    let value = (value << 1) | registers.carry_flag() as u8;
+    registers.write_r8(reg, value);
+    registers.set_flags(Some(value == 0), Some(false), Some(false), Some(new_carry));
+}
 fn ext_bit_small_reg(
     registers: &mut Registers,
     _memory: &mut GameBoyState,
@@ -389,19 +469,15 @@ fn ext_bit_small_reg(
 ) {
     registers.inc_pc(1);
     let value = registers.read_r8(additional.small_reg_src.unwrap());
-    let selected_bit = 1 << additional.bit.unwrap();
-    registers.set_flags(
-        Some(selected_bit & value == 0),
-        Some(false),
-        Some(true),
-        None,
-    );
+    let bit_pos = additional.bit.unwrap();
+    let res = (value >> bit_pos) & 0b1;
+    registers.set_flags(Some(res == 0), Some(false), Some(true), None);
 }
 
 fn ext_bit_mem_wide_reg(
     registers: &mut Registers,
     memory: &mut GameBoyState,
-    additional: &InstructionData
+    additional: &InstructionData,
 ) {
     registers.inc_pc(1);
     let address = registers.read_r16(additional.wide_reg_src.unwrap());
@@ -443,14 +519,14 @@ impl Instruction {
             0x0D => None,
             0x0E => None,
             0x0F => None,
-            0x10 => None,
-            0x11 => None,
-            0x12 => None,
-            0x13 => None,
-            0x14 => None,
-            0x15 => None,
+            0x10 => instr!(byte, "rl b", 2, ext_rl_small_reg, InstructionData::new().small_dst(SmallRegister::B)),
+            0x11 => instr!(byte, "rl c", 2, ext_rl_small_reg, InstructionData::new().small_dst(SmallRegister::C)),
+            0x12 => instr!(byte, "rl d", 2, ext_rl_small_reg, InstructionData::new().small_dst(SmallRegister::D)),
+            0x13 => instr!(byte, "rl e", 2, ext_rl_small_reg, InstructionData::new().small_dst(SmallRegister::E)),
+            0x14 => instr!(byte, "rl h", 2, ext_rl_small_reg, InstructionData::new().small_dst(SmallRegister::H)),
+            0x15 => instr!(byte, "rl l", 2, ext_rl_small_reg, InstructionData::new().small_dst(SmallRegister::L)),
             0x16 => None,
-            0x17 => None,
+            0x17 => instr!(byte, "rl a", 2, ext_rl_small_reg, InstructionData::new().small_dst(SmallRegister::A)),
             0x18 => None,
             0x19 => None,
             0x1A => None,
@@ -699,7 +775,7 @@ impl Instruction {
             0x07 => None,
             0x08 => instr!(byte, "ld (a16), sp", 5, ld_mem_imm16_sp, InstructionData::new()),
             0x09 => None,
-            0x0A => None,
+            0x0A => instr!(byte, "ld a, (bc)", 2, ld_small_reg_mem_wide_reg, InstructionData::new().small_dst(SmallRegister::A).wide_src(WideRegister::BC)),
             0x0B => instr!(byte, "dec bc", 2, dec_wide_reg, InstructionData::new().wide_dst(WideRegister::BC)),
             0x0C => instr!(byte, "inc c", 1, inc_small_reg, InstructionData::new().small_dst(SmallRegister::C)),
             0x0D => instr!(byte, "dec c", 1, dec_small_reg, InstructionData::new().small_dst(SmallRegister::C)),
@@ -715,7 +791,7 @@ impl Instruction {
             0x17 => None,
             0x18 => instr!(byte, "jr s8", 3, jump_relative_immediate, InstructionData::new().with_flags(0, 0)),
             0x19 => None,
-            0x1A => None,
+            0x1A => instr!(byte, "ld a, (de)", 2, ld_small_reg_mem_wide_reg, InstructionData::new().small_dst(SmallRegister::A).wide_src(WideRegister::DE)),
             0x1B => instr!(byte, "dec de", 2, dec_wide_reg, InstructionData::new().wide_dst(WideRegister::DE)),
             0x1C => instr!(byte, "inc e", 1, inc_small_reg, InstructionData::new().small_dst(SmallRegister::E)),
             0x1D => instr!(byte, "dec e", 1, dec_small_reg, InstructionData::new().small_dst(SmallRegister::E)),
@@ -857,14 +933,14 @@ impl Instruction {
             0xA5 => instr!(byte, "and l", 1, and, InstructionData::new().small_src(SmallRegister::H)),
             0xA6 => instr!(byte, "and hl", 2, and, InstructionData::new().wide_src(WideRegister::HL)),
             0xA7 => instr!(byte, "and a", 1, and, InstructionData::new().small_src(SmallRegister::A)),
-            0xA8 => instr!(byte, "xor b", 1, xor, InstructionData::new().small_src(SmallRegister::B)),
-            0xA9 => instr!(byte, "xor c", 1, xor, InstructionData::new().small_src(SmallRegister::C)),
-            0xAA => instr!(byte, "xor d", 1, xor, InstructionData::new().small_src(SmallRegister::D)),
-            0xAB => instr!(byte, "xor e", 1, xor, InstructionData::new().small_src(SmallRegister::E)),
-            0xAC => instr!(byte, "xor h", 1, xor, InstructionData::new().small_src(SmallRegister::H)),
-            0xAD => instr!(byte, "xor l", 1, xor, InstructionData::new().small_src(SmallRegister::H)),
-            0xAE => instr!(byte, "xor hl", 2, xor, InstructionData::new().wide_src(WideRegister::HL)),
-            0xAF => instr!(byte, "xor a", 1, xor, InstructionData::new().small_src(SmallRegister::A)),
+            0xA8 => instr!(byte, "xor b", 1, xor_small_reg, InstructionData::new().small_src(SmallRegister::B)),
+            0xA9 => instr!(byte, "xor c", 1, xor_small_reg, InstructionData::new().small_src(SmallRegister::C)),
+            0xAA => instr!(byte, "xor d", 1, xor_small_reg, InstructionData::new().small_src(SmallRegister::D)),
+            0xAB => instr!(byte, "xor e", 1, xor_small_reg, InstructionData::new().small_src(SmallRegister::E)),
+            0xAC => instr!(byte, "xor h", 1, xor_small_reg, InstructionData::new().small_src(SmallRegister::H)),
+            0xAD => instr!(byte, "xor l", 1, xor_small_reg, InstructionData::new().small_src(SmallRegister::H)),
+            0xAE => instr!(byte, "xor hl", 2, xor_mem_wide_reg, InstructionData::new().wide_src(WideRegister::HL)),
+            0xAF => instr!(byte, "xor a", 1, xor_small_reg, InstructionData::new().small_src(SmallRegister::A)),
             0xB0 => instr!(byte, "or b", 1, or, InstructionData::new().small_src(SmallRegister::B)),
             0xB1 => instr!(byte, "or c", 1, or, InstructionData::new().small_src(SmallRegister::C)),
             0xB2 => instr!(byte, "or d", 1, or, InstructionData::new().small_src(SmallRegister::D)),
@@ -886,7 +962,7 @@ impl Instruction {
             0xC2 => None,
             0xC3 => instr!(byte, "jp nz", 1, jump_immediate, InstructionData::new().with_flags(ZERO_FLAG, 0)),
             0xC4 => instr!(byte, "call nz, a16", 6, call, InstructionData::new().with_flags(ZERO_FLAG, 0)),
-            0xC5 => None,
+            0xC5 => instr!(byte, "push bc", 4, push_wide_reg, InstructionData::new().wide_src(WideRegister::BC)),
             0xC6 => None,
             0xC7 => instr!(byte, "rst 0", 4, rst_n, InstructionData::new().rst_code(0x00)),
             0xC8 => None,
@@ -902,7 +978,7 @@ impl Instruction {
             0xD2 => None,
             0xD3 => None,
             0xD4 => instr!(byte, "call nc, a16", 6, call, InstructionData::new().with_flags(CARRY_FLAG, 0)),
-            0xD5 => None,
+            0xD5 => instr!(byte, "push de", 4, push_wide_reg, InstructionData::new().wide_src(WideRegister::DE)),
             0xD6 => None,
             0xD7 => instr!(byte, "rst 2", 4, rst_n, InstructionData::new().rst_code(0x10)),
             0xD8 => None,
@@ -913,12 +989,12 @@ impl Instruction {
             0xDD => None,
             0xDE => None,
             0xDF => instr!(byte, "rst 3", 4, rst_n, InstructionData::new().rst_code(0x18)),
-            0xE0 => None,
+            0xE0 => instr!(byte, "ld (a8) a", 3, ld_ff00_imm8_small_reg, InstructionData::new().small_src(SmallRegister::A)),
             0xE1 => None,
-            0xE2 => None,
+            0xE2 => instr!(byte, "ld (c) a", 2, ld_ff00_small_reg_small_reg, InstructionData::new().small_src(SmallRegister::A).small_dst(SmallRegister::C)),
             0xE3 => None,
             0xE4 => None,
-            0xE5 => None,
+            0xE5 => instr!(byte, "push hl", 4, push_wide_reg, InstructionData::new().wide_src(WideRegister::HL)),
             0xE6 => None,
             0xE7 => instr!(byte, "rst 4", 4, rst_n, InstructionData::new().rst_code(0x20)),
             0xE8 => None,
@@ -934,7 +1010,7 @@ impl Instruction {
             0xF2 => None,
             0xF3 => None,
             0xF4 => None,
-            0xF5 => None,
+            0xF5 => instr!(byte, "push af", 4, push_wide_reg, InstructionData::new().wide_src(WideRegister::AF)),
             0xF6 => None,
             0xF7 => instr!(byte, "rst 6", 4, rst_n, InstructionData::new().rst_code(0x30)),
             0xF8 => None,
