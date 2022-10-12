@@ -55,7 +55,7 @@ impl GameBoyState {
     pub fn read_u8(&self, address: u16) -> u8 {
         match address {
             START_OF_FIXED_ROM..=END_OF_FIXED_ROM => {
-                if self.boot_enabled && address < END_OF_BOOT {
+                if self.boot_enabled {
                     self.boot.read_u8(address)
                 } else {
                     self.cart.read_u8(address)
@@ -71,7 +71,7 @@ impl GameBoyState {
     }
 
     pub fn read_u16(&self, address: u16) -> u16 {
-        (self.read_u8(address) as u16) << 8 | self.read_u8(address + 1) as u16
+        (self.read_u8(address + 1) as u16) << 8 | self.read_u8(address) as u16
     }
 
     pub fn write_u8(&mut self, address: u16, value: u8) {

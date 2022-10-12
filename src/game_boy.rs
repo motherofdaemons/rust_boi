@@ -1,3 +1,5 @@
+use std::io::Read;
+
 use crate::cpu::Cpu;
 use crate::memory::{GameBoyState, RomChunk};
 
@@ -21,7 +23,9 @@ impl GameBoy {
         trace!("starting run");
         loop {
             self.step();
-            std::thread::sleep(std::time::Duration::from_millis(100));
+            println!("Press enter for next instruction");
+            std::io::stdin().read(&mut [0]);
+            // std::thread::sleep(std::time::Duration::from_millis(100));
         }
     }
 
