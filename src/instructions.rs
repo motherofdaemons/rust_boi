@@ -3,7 +3,7 @@ use std::fmt::Display;
 
 use crate::instruction_data::InstructionData;
 use crate::memory::GameBoyState;
-use crate::registers::{Registers, SmallRegister, WideRegister, ZERO_FLAG};
+use crate::registers::{Registers, SmallRegister, WideRegister, ZERO_FLAG, CARRY_FLAG};
 
 pub struct Instruction {
     pub opcode: u8,
@@ -76,7 +76,7 @@ pub fn jump_relative_immediate(
         let rel = memory.read_u8(registers.get_pc());
         //Not sure if this should wrap around but I assume it can
         //Should probably google this more
-        let (new_pc, _) = registers.get_pc().overflowing_add(rel as u16);
+        let new_pc = registers.get_pc().wrapping_add(rel as u16);
         registers.set_pc(new_pc);
     } else {
         //If we don't follow the jump advance pc by one more
@@ -126,15 +126,22 @@ fn ld_mem_wide_reg_small_reg(
     registers: &mut Registers,
     memory: &mut GameBoyState,
     additional: &InstructionData,
-) {   
+) {
+    registers.inc_pc(1);
     let value = registers.read_r8(additional.small_reg_src.unwrap());
     let address = registers.read_r16(additional.wide_reg_dst.unwrap());
     memory.write_u8(address, value);
 }
-fn ldd_mem_wide_reg_small_reg(registers: &mut Registers, memory: &mut GameBoyState, additional: &InstructionData) {
+fn ldd_mem_wide_reg_small_reg(
+    registers: &mut Registers,
+    memory: &mut GameBoyState,
+    additional: &InstructionData,
+) {
     registers.inc_pc(1);
     let value = registers.read_r8(additional.small_reg_src.unwrap());
-    let address = registers.read_r16(additional.wide_reg_dst.unwrap()).wrapping_sub(1);
+    let address = registers
+        .read_r16(additional.wide_reg_dst.unwrap())
+        .wrapping_sub(1);
     memory.write_u8(address, value);
 }
 //Bit logic funcitons
@@ -260,21 +267,26 @@ fn add_carry(registers: &mut Registers, memory: &mut GameBoyState, additional: &
     );
 }
 
-fn inc(registers: &mut Registers, memory: &mut GameBoyState, additional: &InstructionData) {
+fn inc_small_reg(registers: &mut Registers, memory: &mut GameBoyState, additional: &InstructionData) {
     registers.inc_pc(1);
-    if let Some(reg) = additional.small_reg_dst {
-        let value = registers.read_r8(reg);
-        let (res, _) = value.overflowing_add(1);
-        registers.write_r8(reg, res);
-        registers.set_flags(
-            Some(res == 0),
-            Some(false),
-            Some(check_for_half_carry(value, res)),
-            None,
-        );
-    } else {
-        panic!("Didn't know how to handle inc with {:?}", additional);
-    }
+    let reg = additional.small_reg_dst.unwrap();
+    let value = registers.read_r8(reg);
+    let res = value.wrapping_add(1);
+    registers.write_r8(reg, res);
+    registers.set_flags(
+        Some(res == 0),
+        Some(false),
+        Some(check_for_half_carry(value, res)),
+        None,
+    );
+}
+
+fn inc_wide_reg(registers: &mut Registers, memory: &mut GameBoyState, additional: &InstructionData) {
+    registers.inc_pc(1);
+    let reg = additional.wide_reg_dst.unwrap();
+    let value = registers.read_r16(reg);
+    let res = value.wrapping_add(1);
+    registers.write_r16(reg, res);
 }
 
 fn sub(registers: &mut Registers, memory: &mut GameBoyState, additional: &InstructionData) {
@@ -318,21 +330,26 @@ fn sub_carry(registers: &mut Registers, memory: &mut GameBoyState, additional: &
     );
 }
 
-fn dec(registers: &mut Registers, memory: &mut GameBoyState, additional: &InstructionData) {
+fn dec_small_reg(registers: &mut Registers, _memory: &mut GameBoyState, additional: &InstructionData) {
     registers.inc_pc(1);
-    if let Some(reg) = additional.small_reg_dst {
-        let value = registers.read_r8(reg);
-        let (res, _) = value.overflowing_sub(1);
-        registers.write_r8(reg, res);
-        registers.set_flags(
-            Some(res == 0),
-            Some(true),
-            Some(check_for_half_carry(value, res)),
-            None,
-        );
-    } else {
-        panic!("Didn't know how to handle inc with {:?}", additional);
-    }
+    let reg = additional.small_reg_dst.unwrap();
+    let value = registers.read_r8(reg);
+    let res = value.wrapping_sub(1);
+    registers.write_r8(reg, res);
+    registers.set_flags(
+        Some(res == 0),
+        Some(true),
+        Some(check_for_half_carry(value, res)),
+        None,
+    );
+}
+
+fn dec_wide_reg(registers: &mut Registers, memory: &mut GameBoyState, additional: &InstructionData) {
+    registers.inc_pc(1);
+    let reg = additional.wide_reg_dst.unwrap();
+    let value = registers.read_r16(reg);
+    let res = value.wrapping_sub(1);
+    registers.write_r16(reg, res);
 }
 
 fn ret(registers: &mut Registers, memory: &mut GameBoyState, _additional: &InstructionData) {
@@ -345,6 +362,50 @@ fn rst_n(registers: &mut Registers, memory: &mut GameBoyState, additional: &Inst
     registers.inc_pc(1);
     registers.stack_push16(registers.get_pc(), memory);
     registers.set_pc(additional.code.unwrap() as u16);
+}
+
+fn call(registers: &mut Registers, memory: &mut GameBoyState, additional: &InstructionData) {
+    registers.inc_pc(1);
+    let address = memory.read_u16(registers.get_pc());
+    registers.inc_pc(2);
+    if (registers.get_flags() & additional.flag_mask.unwrap()) == additional.flag_expected.unwrap() {
+        registers.stack_push16(registers.get_pc(), memory);
+        registers.set_pc(address);
+    }
+}
+
+// Extended fucntion table functions
+fn ext_bit_small_reg(
+    registers: &mut Registers,
+    _memory: &mut GameBoyState,
+    additional: &InstructionData,
+) {
+    registers.inc_pc(1);
+    let value = registers.read_r8(additional.small_reg_src.unwrap());
+    let selected_bit = 1 << additional.bit.unwrap();
+    registers.set_flags(
+        Some(selected_bit & value == 0),
+        Some(false),
+        Some(true),
+        None,
+    );
+}
+
+fn ext_bit_mem_wide_reg(
+    registers: &mut Registers,
+    memory: &mut GameBoyState,
+    additional: &InstructionData
+) {
+    registers.inc_pc(1);
+    let address = registers.read_r16(additional.wide_reg_src.unwrap());
+    let value = memory.read_u8(address);
+    let selected_bit = 1 << additional.bit.unwrap();
+    registers.set_flags(
+        Some(selected_bit & value == 0),
+        Some(false),
+        Some(true),
+        None,
+    );
 }
 
 impl Instruction {
@@ -423,70 +484,70 @@ impl Instruction {
             0x3D => None,
             0x3E => None,
             0x3F => None,
-            0x40 => None,
-            0x41 => None,
-            0x42 => None,
-            0x43 => None,
-            0x44 => None,
-            0x45 => None,
-            0x46 => None,
-            0x47 => None,
-            0x48 => None,
-            0x49 => None,
-            0x4A => None,
-            0x4B => None,
-            0x4C => None,
-            0x4D => None,
-            0x4E => None,
-            0x4F => None,
-            0x50 => None,
-            0x51 => None,
-            0x52 => None,
-            0x53 => None,
-            0x54 => None,
-            0x55 => None,
-            0x56 => None,
-            0x57 => None,
-            0x58 => None,
-            0x59 => None,
-            0x5A => None,
-            0x5B => None,
-            0x5C => None,
-            0x5D => None,
-            0x5E => None,
-            0x5F => None,
-            0x60 => None,
-            0x61 => None,
-            0x62 => None,
-            0x63 => None,
-            0x64 => None,
-            0x65 => None,
-            0x66 => None,
-            0x67 => None,
-            0x68 => None,
-            0x69 => None,
-            0x6A => None,
-            0x6B => None,
-            0x6C => None,
-            0x6D => None,
-            0x6E => None,
-            0x6F => None,
-            0x70 => None,
-            0x71 => None,
-            0x72 => None,
-            0x73 => None,
-            0x74 => None,
-            0x75 => None,
-            0x76 => None,
-            0x77 => None,
-            0x78 => None,
-            0x79 => None,
-            0x7A => None,
-            0x7B => None,
-            0x7C => None,
-            0x7D => None,
-            0x7E => None,
-            0x7F => None,
+            0x40 => instr!(byte, "bit 0, b", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::B).bit(0)),
+            0x41 => instr!(byte, "bit 0, c", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::C).bit(0)),
+            0x42 => instr!(byte, "bit 0, d", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::D).bit(0)),
+            0x43 => instr!(byte, "bit 0, e", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::E).bit(0)),
+            0x44 => instr!(byte, "bit 0, h", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::H).bit(0)),
+            0x45 => instr!(byte, "bit 0, l", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::L).bit(0)),
+            0x46 => instr!(byte, "bit 0, (hl)", 2, ext_bit_mem_wide_reg, InstructionData::new().wide_src(WideRegister::HL).bit(0)),
+            0x47 => instr!(byte, "bit 0, a", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::A).bit(0)),
+            0x48 => instr!(byte, "bit 1, b", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::B).bit(1)),
+            0x49 => instr!(byte, "bit 1, c", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::C).bit(1)),
+            0x4A => instr!(byte, "bit 1, d", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::D).bit(1)),
+            0x4B => instr!(byte, "bit 1, e", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::E).bit(1)),
+            0x4C => instr!(byte, "bit 1, h", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::H).bit(1)),
+            0x4D => instr!(byte, "bit 1, l", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::L).bit(1)),
+            0x4E => instr!(byte, "bit 1, (hl)", 2, ext_bit_mem_wide_reg, InstructionData::new().wide_src(WideRegister::HL).bit(1)),
+            0x4F => instr!(byte, "bit 1, a", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::A).bit(1)),
+            0x50 => instr!(byte, "bit 2, b", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::B).bit(2)),
+            0x51 => instr!(byte, "bit 2, c", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::C).bit(2)),
+            0x52 => instr!(byte, "bit 2, d", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::D).bit(2)),
+            0x53 => instr!(byte, "bit 2, e", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::E).bit(2)),
+            0x54 => instr!(byte, "bit 2, h", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::H).bit(2)),
+            0x55 => instr!(byte, "bit 2, l", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::L).bit(2)),
+            0x56 => instr!(byte, "bit 2, (hl)", 2, ext_bit_mem_wide_reg, InstructionData::new().wide_src(WideRegister::HL).bit(2)),
+            0x57 => instr!(byte, "bit 2, a", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::A).bit(2)),
+            0x58 => instr!(byte, "bit 3, b", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::B).bit(3)),
+            0x59 => instr!(byte, "bit 3, c", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::C).bit(3)),
+            0x5A => instr!(byte, "bit 3, d", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::D).bit(3)),
+            0x5B => instr!(byte, "bit 3, e", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::E).bit(3)),
+            0x5C => instr!(byte, "bit 3, h", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::H).bit(3)),
+            0x5D => instr!(byte, "bit 3, l", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::L).bit(3)),
+            0x5E => instr!(byte, "bit 3, (hl)", 2, ext_bit_mem_wide_reg, InstructionData::new().wide_src(WideRegister::HL).bit(3)),
+            0x5F => instr!(byte, "bit 3, a", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::A).bit(3)),
+            0x60 => instr!(byte, "bit 4, b", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::B).bit(4)),
+            0x61 => instr!(byte, "bit 4, c", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::C).bit(4)),
+            0x62 => instr!(byte, "bit 4, d", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::D).bit(4)),
+            0x63 => instr!(byte, "bit 4, e", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::E).bit(4)),
+            0x64 => instr!(byte, "bit 4, h", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::H).bit(4)),
+            0x65 => instr!(byte, "bit 4, l", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::L).bit(4)),
+            0x66 => instr!(byte, "bit 4, (hl)", 2, ext_bit_mem_wide_reg, InstructionData::new().wide_src(WideRegister::HL).bit(4)),
+            0x67 => instr!(byte, "bit 4, a", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::A).bit(4)),
+            0x68 => instr!(byte, "bit 5, b", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::B).bit(5)),
+            0x69 => instr!(byte, "bit 5, c", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::C).bit(5)),
+            0x6A => instr!(byte, "bit 5, d", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::D).bit(5)),
+            0x6B => instr!(byte, "bit 5, e", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::E).bit(5)),
+            0x6C => instr!(byte, "bit 5, h", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::H).bit(5)),
+            0x6D => instr!(byte, "bit 5, l", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::L).bit(5)),
+            0x6E => instr!(byte, "bit 5, (hl)", 2, ext_bit_mem_wide_reg, InstructionData::new().wide_src(WideRegister::HL).bit(5)),
+            0x6F => instr!(byte, "bit 5, a", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::A).bit(5)),
+            0x70 => instr!(byte, "bit 6, b", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::B).bit(6)),
+            0x71 => instr!(byte, "bit 6, c", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::C).bit(6)),
+            0x72 => instr!(byte, "bit 6, d", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::D).bit(6)),
+            0x73 => instr!(byte, "bit 6, e", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::E).bit(6)),
+            0x74 => instr!(byte, "bit 6, h", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::H).bit(6)),
+            0x75 => instr!(byte, "bit 6, l", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::L).bit(6)),
+            0x76 => instr!(byte, "bit 6, (hl)", 2, ext_bit_mem_wide_reg, InstructionData::new().wide_src(WideRegister::HL).bit(6)),
+            0x77 => instr!(byte, "bit 6, a", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::A).bit(6)),
+            0x78 => instr!(byte, "bit 7, b", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::B).bit(7)),
+            0x79 => instr!(byte, "bit 7, c", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::C).bit(7)),
+            0x7A => instr!(byte, "bit 7, d", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::D).bit(7)),
+            0x7B => instr!(byte, "bit 7, e", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::E).bit(7)),
+            0x7C => instr!(byte, "bit 7, h", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::H).bit(7)),
+            0x7D => instr!(byte, "bit 7, l", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::L).bit(7)),
+            0x7E => instr!(byte, "bit 7, (hl)", 2, ext_bit_mem_wide_reg, InstructionData::new().wide_src(WideRegister::HL).bit(7)),
+            0x7F => instr!(byte, "bit 7, a", 2, ext_bit_small_reg, InstructionData::new().small_src(SmallRegister::A).bit(7)),
             0x80 => None,
             0x81 => None,
             0x82 => None,
@@ -624,65 +685,65 @@ impl Instruction {
             0x00 => instr!(byte, "nop", 1, no_op, InstructionData::new()),
             0x01 => instr!(byte, "ld bc, d16", 3, ld_wide_reg_imm16, InstructionData::new().wide_dst(WideRegister::BC)),
             0x02 => instr!(byte, "ld (bc), a", 2, ld_mem_wide_reg_small_reg, InstructionData::new().wide_dst(WideRegister::BC).small_src(SmallRegister::A)),
-            0x03 => instr!(byte, "inc bc", 2, inc, InstructionData::new().wide_dst(WideRegister::BC)),
-            0x04 => instr!(byte, "inc b", 1, inc, InstructionData::new().small_dst(SmallRegister::B)),
-            0x05 => instr!(byte, "dec b", 1, dec, InstructionData::new().small_dst(SmallRegister::B)),
+            0x03 => instr!(byte, "inc bc", 2, inc_wide_reg, InstructionData::new().wide_dst(WideRegister::BC)),
+            0x04 => instr!(byte, "inc b", 1, inc_small_reg, InstructionData::new().small_dst(SmallRegister::B)),
+            0x05 => instr!(byte, "dec b", 1, dec_small_reg, InstructionData::new().small_dst(SmallRegister::B)),
             0x06 => instr!(byte, "ld b, d8", 2, ld_small_reg_imm8, InstructionData::new().small_dst(SmallRegister::B)),
             0x07 => None,
             0x08 => None,
             0x09 => None,
             0x0A => None,
-            0x0B => None,
-            0x0C => instr!(byte, "inc c", 1, inc, InstructionData::new().small_dst(SmallRegister::C)),
-            0x0D => None,
+            0x0B => instr!(byte, "dec bc", 2, dec_wide_reg, InstructionData::new().wide_dst(WideRegister::BC)),
+            0x0C => instr!(byte, "inc c", 1, inc_small_reg, InstructionData::new().small_dst(SmallRegister::C)),
+            0x0D => instr!(byte, "dec c", 1, dec_small_reg, InstructionData::new().small_dst(SmallRegister::C)),
             0x0E => None,
             0x0F => None,
             0x10 => None,
             0x11 => instr!(byte, "ld de, d16", 3, ld_wide_reg_imm16, InstructionData::new().wide_dst(WideRegister::DE)),
             0x12 => instr!(byte, "ld (de), a", 2, ld_mem_wide_reg_small_reg, InstructionData::new().wide_dst(WideRegister::DE).small_src(SmallRegister::A)),
-            0x13 => None,
-            0x14 => instr!(byte, "inc d", 1, inc, InstructionData::new().small_dst(SmallRegister::D)),
-            0x15 => None,
+            0x13 => instr!(byte, "inc de", 2, inc_wide_reg, InstructionData::new().wide_dst(WideRegister::DE)),
+            0x14 => instr!(byte, "inc d", 1, inc_small_reg, InstructionData::new().small_dst(SmallRegister::D)),
+            0x15 => instr!(byte, "dec d", 1, dec_small_reg, InstructionData::new().small_dst(SmallRegister::D)),
             0x16 => None,
             0x17 => None,
-            0x18 => None,
+            0x18 => instr!(byte, "jr s8", 3, jump_relative_immediate, InstructionData::new().with_flags(0, 0)),
             0x19 => None,
             0x1A => None,
-            0x1B => None,
-            0x1C => instr!(byte, "inc E", 1, inc, InstructionData::new().small_dst(SmallRegister::E)),
-            0x1D => None,
+            0x1B => instr!(byte, "dec de", 2, dec_wide_reg, InstructionData::new().wide_dst(WideRegister::DE)),
+            0x1C => instr!(byte, "inc e", 1, inc_small_reg, InstructionData::new().small_dst(SmallRegister::E)),
+            0x1D => instr!(byte, "dec e", 1, dec_small_reg, InstructionData::new().small_dst(SmallRegister::E)),
             0x1E => None,
             0x1F => None,
-            0x20 => None,
+            0x20 => instr!(byte, "jr nz, s8", 3, jump_relative_immediate, InstructionData::new().with_flags(ZERO_FLAG, 0)),
             0x21 => instr!(byte, "ld hl, d16", 3, ld_wide_reg_imm16, InstructionData::new().wide_dst(WideRegister::HL)),
             0x22 => None,
-            0x23 => None,
-            0x24 => instr!(byte, "inc H", 1, inc, InstructionData::new().small_dst(SmallRegister::H)),
-            0x25 => None,
+            0x23 => instr!(byte, "inc hl", 2, inc_wide_reg, InstructionData::new().wide_dst(WideRegister::HL)),
+            0x24 => instr!(byte, "inc h", 1, inc_small_reg, InstructionData::new().small_dst(SmallRegister::H)),
+            0x25 => instr!(byte, "dec h", 1, dec_small_reg, InstructionData::new().small_dst(SmallRegister::H)),
             0x26 => None,
             0x27 => None,
             0x28 => instr!(byte, "jr z, s8", 3, jump_relative_immediate, InstructionData::new().with_flags(ZERO_FLAG, ZERO_FLAG)),
             0x29 => None,
             0x2A => None,
-            0x2B => None,
-            0x2C => instr!(byte, "inc L", 1, inc, InstructionData::new().small_dst(SmallRegister::L)),
-            0x2D => None,
+            0x2B => instr!(byte, "dec hl", 2, dec_wide_reg, InstructionData::new().wide_dst(WideRegister::HL)),
+            0x2C => instr!(byte, "inc l", 1, inc_small_reg, InstructionData::new().small_dst(SmallRegister::L)),
+            0x2D => instr!(byte, "dec l", 1, dec_small_reg, InstructionData::new().small_dst(SmallRegister::L)),
             0x2E => None,
             0x2F => None,
-            0x30 => None,
+            0x30 => instr!(byte, "jr nc, s8", 3, jump_relative_immediate, InstructionData::new().with_flags(CARRY_FLAG, 0)),
             0x31 => instr!(byte, "ld sp, d16", 3, ld_wide_reg_imm16, InstructionData::new().wide_dst(WideRegister::SP)),
             0x32 => instr!(byte, "ld (hl-), a", 2, ldd_mem_wide_reg_small_reg, InstructionData::new().small_src(SmallRegister::A).wide_dst(WideRegister::HL)),
-            0x33 => None,
+            0x33 => instr!(byte, "inc sp", 2, inc_wide_reg, InstructionData::new().wide_dst(WideRegister::SP)),
             0x34 => None,
             0x35 => None,
             0x36 => None,
             0x37 => None,
-            0x38 => None,
+            0x38 => instr!(byte, "jr s8", 3, jump_relative_immediate, InstructionData::new().with_flags(CARRY_FLAG, CARRY_FLAG)),
             0x39 => None,
             0x3A => None,
-            0x3B => None,
-            0x3C => instr!(byte, "inc A", 1, inc, InstructionData::new().small_dst(SmallRegister::A)),
-            0x3D => None,
+            0x3B => instr!(byte, "dec sp", 2, dec_wide_reg, InstructionData::new().wide_dst(WideRegister::SP)),
+            0x3C => instr!(byte, "inc a", 1, inc_small_reg, InstructionData::new().small_dst(SmallRegister::A)),
+            0x3D => instr!(byte, "dec a", 1, dec_small_reg, InstructionData::new().small_dst(SmallRegister::A)),
             0x3E => None,
             0x3F => None,
             0x40 => instr!(byte, "ld b, b",  1, ld_small_reg_small_reg, InstructionData::new().small_src(SmallRegister::B).small_dst(SmallRegister::B)),
@@ -817,7 +878,7 @@ impl Instruction {
             0xC1 => None,
             0xC2 => None,
             0xC3 => instr!(byte, "jp nz", 1, jump_immediate, InstructionData::new().with_flags(ZERO_FLAG, 0)),
-            0xC4 => None,
+            0xC4 => instr!(byte, "call nz, a16", 6, call, InstructionData::new().with_flags(ZERO_FLAG, 0)),
             0xC5 => None,
             0xC6 => None,
             0xC7 => instr!(byte, "rst 0", 4, rst_n, InstructionData::new().rst_code(0x00)),
@@ -825,15 +886,15 @@ impl Instruction {
             0xC9 => instr!(byte, "ret", 1, ret, InstructionData::new()),
             0xCA => None,
             0xCB => None,
-            0xCC => None,
-            0xCD => None,
+            0xCC => instr!(byte, "call z, a16", 6, call, InstructionData::new().with_flags(ZERO_FLAG, ZERO_FLAG)),
+            0xCD => instr!(byte, "call a16", 6, call, InstructionData::new().with_flags(0, 0)),
             0xCE => None,
             0xCF => instr!(byte, "rst 1", 4, rst_n, InstructionData::new().rst_code(0x08)),
             0xD0 => None,
             0xD1 => None,
             0xD2 => None,
             0xD3 => None,
-            0xD4 => None,
+            0xD4 => instr!(byte, "call nc, a16", 6, call, InstructionData::new().with_flags(CARRY_FLAG, 0)),
             0xD5 => None,
             0xD6 => None,
             0xD7 => instr!(byte, "rst 2", 4, rst_n, InstructionData::new().rst_code(0x10)),
@@ -841,7 +902,7 @@ impl Instruction {
             0xD9 => None,
             0xDA => None,
             0xDB => None,
-            0xDC => None,
+            0xDC => instr!(byte, "call c, a16", 6, call, InstructionData::new().with_flags(CARRY_FLAG, CARRY_FLAG)),
             0xDD => None,
             0xDE => None,
             0xDF => instr!(byte, "rst 3", 4, rst_n, InstructionData::new().rst_code(0x18)),

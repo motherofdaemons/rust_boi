@@ -66,7 +66,7 @@ impl GameBoyState {
             START_OF_CARTRIDGE_RAM..=END_OF_CARTRIDGE_RAM => todo!(),
             START_OF_INTERNAL_RAM..=END_OF_INTERNAL_RAM => todo!(),
             START_OF_ECHO_RAM..=END_OF_ECHO_RAM => todo!(),
-            _ => panic! {"Invalid address {}", address},
+            _ => self.high_ram.read_u8(address - END_OF_ECHO_RAM),
         }
     }
 
@@ -101,6 +101,9 @@ impl GameBoyState {
 
     fn write_high_mem(&mut self, address: u16, value: u8) {
         //There are some high bits that when we write them we won't to change some variables
+        if address == BOOT_ROM_ADDRESS {
+            self.boot_enabled = false;
+        }
         self.high_ram.write_u8(address - END_OF_ECHO_RAM, value);
     }
 }

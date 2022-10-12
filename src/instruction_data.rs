@@ -9,6 +9,7 @@ pub struct InstructionData {
     pub wide_reg_src: Option<WideRegister>,
     pub wide_reg_dst: Option<WideRegister>,
     pub code: Option<u8>,
+    pub bit: Option<u8>,
 }
 
 impl InstructionData {
@@ -21,6 +22,7 @@ impl InstructionData {
             wide_reg_src: None,
             wide_reg_dst: None,
             code: None,
+            bit: None,
         }
     }
     pub const fn small_src(mut self, src: SmallRegister) -> Self {
@@ -49,8 +51,13 @@ impl InstructionData {
         self
     }
 
-        pub const fn rst_code(mut self, code: u8) -> Self {
+    pub const fn rst_code(mut self, code: u8) -> Self {
         self.code = Some(code);
+        self
+    }
+
+    pub const fn bit(mut self, bit: u8) -> Self {
+        self.bit = Some(bit);
         self
     }
 }
