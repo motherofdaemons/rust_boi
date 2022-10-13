@@ -242,27 +242,43 @@ fn or(registers: &mut Registers, memory: &mut GameBoyState, additional: &Instruc
     }
 }
 
-fn cp(registers: &mut Registers, memory: &mut GameBoyState, additional: &InstructionData) {
+fn cp_r8(registers: &mut Registers, _memory: &mut GameBoyState, additional: &InstructionData) {
     registers.inc_pc(1);
     let a = registers.read_r8(R8::A);
-    let mut value = 0;
-    if let Some(reg) = additional.r8_src {
-        value = registers.read_r8(reg);
-    } else if let Some(reg) = additional.r16_src {
-        if reg != R16::HL {
-            panic!(
-                "Don't know how to cp with a wide register other than HL {:?}",
-                additional
-            );
-        }
-        let address = registers.read_r16(reg);
-        value = memory.read_u8(address);
-    }
+    let value = registers.read_r8(additional.r8_src.unwrap());
     let (res, carried) = a.overflowing_sub(value);
     registers.set_flags(
         Some(res == 0),
         Some(true),
-        Some(check_for_half_carry(a, res)),
+        Some(check_for_half_carry(value, res)),
+        Some(carried),
+    );
+}
+
+fn cp_indir_r16(registers: &mut Registers, memory: &mut GameBoyState, additional: &InstructionData) {
+    registers.inc_pc(1);
+    let a = registers.read_r8(R8::A);
+    let address = registers.read_r16(additional.r16_src.unwrap());
+    let value = memory.read_u8(address);
+    let (res, carried) = a.overflowing_sub(value);
+    registers.set_flags(
+        Some(res == 0),
+        Some(true),
+        Some(check_for_half_carry(value, res)),
+        Some(carried),
+    );
+}
+
+fn cp_imm8(registers: &mut Registers, memory: &mut GameBoyState, additional: &InstructionData) {
+    registers.inc_pc(1);
+    let a = registers.read_r8(R8::A);
+    let value = memory.read_u8(registers.get_pc());
+    registers.inc_pc(1);
+    let (res, carried) = a.overflowing_sub(value);
+    registers.set_flags(
+        Some(res == 0),
+        Some(true),
+        Some(check_for_half_carry(value, res)),
         Some(carried),
     );
 }
@@ -953,14 +969,14 @@ impl Instruction {
             0xB5 => instr!(byte, "or l", 1, or, InstructionData::new().r8_src(R8::H)),
             0xB6 => instr!(byte, "or hl", 2, or, InstructionData::new().r16_src(R16::HL)),
             0xB7 => instr!(byte, "or a", 1, or, InstructionData::new().r8_src(R8::A)),
-            0xB8 => instr!(byte, "cp b",  1, cp, InstructionData::new().r8_src(R8::B)),
-            0xB9 => instr!(byte, "cp c",  1, cp, InstructionData::new().r8_src(R8::C)),
-            0xBA => instr!(byte, "cp d",  1, cp, InstructionData::new().r8_src(R8::D)),
-            0xBB => instr!(byte, "cp e",  1, cp, InstructionData::new().r8_src(R8::E)),
-            0xBC => instr!(byte, "cp h",  1, cp, InstructionData::new().r8_src(R8::H)),
-            0xBD => instr!(byte, "cp l",  1, cp, InstructionData::new().r8_src(R8::L)),
-            0xBE => instr!(byte, "cp hl", 2, cp, InstructionData::new().r16_src(R16::HL)),
-            0xBF => instr!(byte, "cp a",  1, cp, InstructionData::new().r8_src(R8::A)),
+            0xB8 => instr!(byte, "cp b",  1, cp_r8, InstructionData::new().r8_src(R8::B)),
+            0xB9 => instr!(byte, "cp c",  1, cp_r8, InstructionData::new().r8_src(R8::C)),
+            0xBA => instr!(byte, "cp d",  1, cp_r8, InstructionData::new().r8_src(R8::D)),
+            0xBB => instr!(byte, "cp e",  1, cp_r8, InstructionData::new().r8_src(R8::E)),
+            0xBC => instr!(byte, "cp h",  1, cp_r8, InstructionData::new().r8_src(R8::H)),
+            0xBD => instr!(byte, "cp l",  1, cp_r8, InstructionData::new().r8_src(R8::L)),
+            0xBE => instr!(byte, "cp hl", 2, cp_indir_r16, InstructionData::new().r16_src(R16::HL)),
+            0xBF => instr!(byte, "cp a",  1, cp_r8, InstructionData::new().r8_src(R8::A)),
             0xC0 => None,
             0xC1 => instr!(byte, "pop bc", 3, pop_r16, InstructionData::new().r16_dst(R16::BC)),
             0xC2 => None,
@@ -1023,7 +1039,7 @@ impl Instruction {
             0xFB => None,
             0xFC => None,
             0xFD => None,
-            0xFE => instr!(byte, "cp d8", 1, cp, InstructionData::new()),
+            0xFE => instr!(byte, "cp d8", 1, cp_imm8, InstructionData::new()),
             0xFF => instr!(byte, "rst 7", 4, rst_n, InstructionData::new().rst_code(0x38)),
         }
     }
