@@ -1,5 +1,3 @@
-use std::io::Read;
-
 use crate::cpu::Cpu;
 use crate::memory::{GameBoyState, RomChunk};
 

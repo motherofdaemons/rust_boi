@@ -4,18 +4,18 @@ use crate::Result;
 
 const RAM_BANK_SIZE: usize = 0x2000;
 const START_OF_FIXED_ROM: u16 = 0x0000;
-const END_OF_BOOT: u16 = 0x101;
-const END_OF_FIXED_ROM: u16 = 0x4000;
-const START_OF_BANKED_ROM: u16 = 0x4001;
-const END_OF_BANKED_ROM: u16 = 0x8000;
-const START_OF_VRAM: u16 = 0x8001;
-const END_OF_VRAM: u16 = 0xA000;
-const START_OF_CARTRIDGE_RAM: u16 = 0xA001;
-const END_OF_CARTRIDGE_RAM: u16 = 0xC000;
-const START_OF_INTERNAL_RAM: u16 = 0xC001;
-const END_OF_INTERNAL_RAM: u16 = 0xE000;
-const START_OF_ECHO_RAM: u16 = 0xE001;
-const END_OF_ECHO_RAM: u16 = 0xFE00;
+const END_OF_BOOT: u16 = 0xFF;
+const END_OF_FIXED_ROM: u16 = 0x3FFF;
+const START_OF_BANKED_ROM: u16 = 0x4000;
+const END_OF_BANKED_ROM: u16 = 0x7FFF;
+const START_OF_VRAM: u16 = 0x8000;
+const END_OF_VRAM: u16 = 0x9FFF;
+const START_OF_CARTRIDGE_RAM: u16 = 0xA000;
+const END_OF_CARTRIDGE_RAM: u16 = 0xBFFF;
+const START_OF_INTERNAL_RAM: u16 = 0xC000;
+const END_OF_INTERNAL_RAM: u16 = 0xDFFF;
+const START_OF_ECHO_RAM: u16 = 0xE000;
+const END_OF_ECHO_RAM: u16 = 0xFDFF;
 
 const ROM_BANK_SIZE: usize = 0x4000;
 const GAMEPAD_ADDRESS: u16 = 0xFF00;
@@ -72,10 +72,16 @@ impl GameBoyState {
                     self.cart_bank_0.read_u8(address)
                 }
             }
-            START_OF_BANKED_ROM..=END_OF_BANKED_ROM => self.cart_bank_n.read_u8(address - START_OF_BANKED_ROM),
+            START_OF_BANKED_ROM..=END_OF_BANKED_ROM => {
+                self.cart_bank_n.read_u8(address - START_OF_BANKED_ROM)
+            }
             START_OF_VRAM..=END_OF_VRAM => self.vram.read_u8(address - START_OF_VRAM),
-            START_OF_CARTRIDGE_RAM..=END_OF_CARTRIDGE_RAM => self.cart_ram.read_u8(address - START_OF_CARTRIDGE_RAM),
-            START_OF_INTERNAL_RAM..=END_OF_INTERNAL_RAM => self.iram.read_u8(address - START_OF_INTERNAL_RAM),
+            START_OF_CARTRIDGE_RAM..=END_OF_CARTRIDGE_RAM => {
+                self.cart_ram.read_u8(address - START_OF_CARTRIDGE_RAM)
+            }
+            START_OF_INTERNAL_RAM..=END_OF_INTERNAL_RAM => {
+                self.iram.read_u8(address - START_OF_INTERNAL_RAM)
+            }
             START_OF_ECHO_RAM..=END_OF_ECHO_RAM => todo!(),
             _ => self.high_ram.read_u8(address - END_OF_ECHO_RAM),
         }
@@ -94,10 +100,16 @@ impl GameBoyState {
                     self.cart_bank_0.write_u8(address, value);
                 }
             }
-            START_OF_BANKED_ROM..=END_OF_BANKED_ROM => self.cart_bank_n.write_u8(address - START_OF_BANKED_ROM, value),
+            START_OF_BANKED_ROM..=END_OF_BANKED_ROM => self
+                .cart_bank_n
+                .write_u8(address - START_OF_BANKED_ROM, value),
             START_OF_VRAM..=END_OF_VRAM => self.vram.write_u8(address - START_OF_VRAM, value),
-            START_OF_CARTRIDGE_RAM..=END_OF_CARTRIDGE_RAM => self.cart_ram.write_u8(address - START_OF_CARTRIDGE_RAM, value),
-            START_OF_INTERNAL_RAM..=END_OF_INTERNAL_RAM => self.iram.write_u8(address - START_OF_INTERNAL_RAM, value),
+            START_OF_CARTRIDGE_RAM..=END_OF_CARTRIDGE_RAM => self
+                .cart_ram
+                .write_u8(address - START_OF_CARTRIDGE_RAM, value),
+            START_OF_INTERNAL_RAM..=END_OF_INTERNAL_RAM => {
+                self.iram.write_u8(address - START_OF_INTERNAL_RAM, value)
+            }
             START_OF_ECHO_RAM..=END_OF_ECHO_RAM => todo!(),
             _ => self.write_high_mem(address, value),
         }
@@ -124,7 +136,7 @@ impl RomChunk {
         if let Some(rom_path) = rom_path {
             Self::from_file(rom_path)
         } else {
-            Ok(Self { bytes: Vec::new() })
+            Ok( Self { bytes: vec![0; ROM_BANK_SIZE * 2] })
         }
     }
 

@@ -1,13 +1,13 @@
-use crate::registers::{SmallRegister, WideRegister};
+use crate::registers::{R16, R8};
 
 #[derive(Clone, Copy, Debug)]
 pub struct InstructionData {
     pub flag_mask: Option<u8>,
     pub flag_expected: Option<u8>,
-    pub small_reg_src: Option<SmallRegister>,
-    pub small_reg_dst: Option<SmallRegister>,
-    pub wide_reg_src: Option<WideRegister>,
-    pub wide_reg_dst: Option<WideRegister>,
+    pub r8_src: Option<R8>,
+    pub r8_dst: Option<R8>,
+    pub r16_src: Option<R16>,
+    pub r16_dst: Option<R16>,
     pub code: Option<u8>,
     pub bit: Option<u8>,
 }
@@ -17,31 +17,31 @@ impl InstructionData {
         Self {
             flag_mask: None,
             flag_expected: None,
-            small_reg_src: None,
-            small_reg_dst: None,
-            wide_reg_src: None,
-            wide_reg_dst: None,
+            r8_src: None,
+            r8_dst: None,
+            r16_src: None,
+            r16_dst: None,
             code: None,
             bit: None,
         }
     }
-    pub const fn small_src(mut self, src: SmallRegister) -> Self {
-        self.small_reg_src = Some(src);
+    pub const fn r8_src(mut self, src: R8) -> Self {
+        self.r8_src = Some(src);
         self
     }
 
-    pub const fn small_dst(mut self, dst: SmallRegister) -> Self {
-        self.small_reg_dst = Some(dst);
+    pub const fn r8_dst(mut self, dst: R8) -> Self {
+        self.r8_dst = Some(dst);
         self
     }
 
-    pub const fn wide_src(mut self, src: WideRegister) -> Self {
-        self.wide_reg_src = Some(src);
+    pub const fn r16_src(mut self, src: R16) -> Self {
+        self.r16_src = Some(src);
         self
     }
 
-    pub const fn wide_dst(mut self, dst: WideRegister) -> Self {
-        self.wide_reg_dst = Some(dst);
+    pub const fn r16_dst(mut self, dst: R16) -> Self {
+        self.r16_dst = Some(dst);
         self
     }
 

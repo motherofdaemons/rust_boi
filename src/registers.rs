@@ -17,7 +17,7 @@ pub struct RegisterPair {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SmallRegister {
+pub enum R8 {
     B,
     C,
     A,
@@ -29,7 +29,7 @@ pub enum SmallRegister {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum WideRegister {
+pub enum R16 {
     PC,
     SP,
     BC,
@@ -45,16 +45,16 @@ pub const CARRY_FLAG: u8 = 0x10;
 
 impl Registers {
     pub fn get_pc(&self) -> u16 {
-        self.read_r16(WideRegister::PC)
+        self.read_r16(R16::PC)
     }
     pub fn inc_pc(&mut self, by: u16) {
-        self.write_r16(WideRegister::PC, self.get_pc().wrapping_add(by));
+        self.write_r16(R16::PC, self.get_pc().wrapping_add(by));
     }
     pub fn set_pc(&mut self, pc: u16) {
-        self.write_r16(WideRegister::PC, pc)
+        self.write_r16(R16::PC, pc)
     }
     pub fn get_flags(&self) -> u8 {
-        self.read_r8(SmallRegister::F)
+        self.read_r8(R8::F)
     }
     pub fn set_flags(
         &mut self,
@@ -63,7 +63,7 @@ impl Registers {
         half_carry: Option<bool>,
         carry: Option<bool>,
     ) {
-        let mut flags = self.read_r8(SmallRegister::F);
+        let mut flags = self.read_r8(R8::F);
         if let Some(zero) = zero {
             flags = Registers::set_bit_flag(flags, ZERO_FLAG, zero);
         }
@@ -76,7 +76,7 @@ impl Registers {
         if let Some(carry) = carry {
             flags = Registers::set_bit_flag(flags, CARRY_FLAG, carry);
         }
-        self.write_r8(SmallRegister::F, flags);
+        self.write_r8(R8::F, flags);
     }
     pub fn set_bit_flag(flags: u8, bit: u8, set: bool) -> u8 {
         match set {
@@ -97,52 +97,51 @@ impl Registers {
         self.get_flags() & CARRY_FLAG == CARRY_FLAG
     }
 
-
-    pub fn read_r8(&self, reg: SmallRegister) -> u8 {
+    pub fn read_r8(&self, reg: R8) -> u8 {
         match reg {
-            SmallRegister::B => self.bc.l,
-            SmallRegister::C => self.bc.r,
-            SmallRegister::A => self.af.l,
-            SmallRegister::F => self.af.r,
-            SmallRegister::D => self.de.l,
-            SmallRegister::E => self.de.r,
-            SmallRegister::H => self.hl.l,
-            SmallRegister::L => self.hl.r,
+            R8::B => self.bc.l,
+            R8::C => self.bc.r,
+            R8::A => self.af.l,
+            R8::F => self.af.r,
+            R8::D => self.de.l,
+            R8::E => self.de.r,
+            R8::H => self.hl.l,
+            R8::L => self.hl.r,
         }
     }
 
-    pub fn write_r8(&mut self, reg: SmallRegister, value: u8) {
+    pub fn write_r8(&mut self, reg: R8, value: u8) {
         match reg {
-            SmallRegister::B => self.bc.l = value,
-            SmallRegister::C => self.bc.r = value,
-            SmallRegister::A => self.af.l = value,
-            SmallRegister::F => self.af.r = value,
-            SmallRegister::D => self.de.l = value,
-            SmallRegister::E => self.de.r = value,
-            SmallRegister::H => self.hl.l = value,
-            SmallRegister::L => self.hl.r = value,
+            R8::B => self.bc.l = value,
+            R8::C => self.bc.r = value,
+            R8::A => self.af.l = value,
+            R8::F => self.af.r = value,
+            R8::D => self.de.l = value,
+            R8::E => self.de.r = value,
+            R8::H => self.hl.l = value,
+            R8::L => self.hl.r = value,
         }
     }
 
-    pub fn read_r16(&self, reg: WideRegister) -> u16 {
+    pub fn read_r16(&self, reg: R16) -> u16 {
         match reg {
-            WideRegister::PC => self.pc,
-            WideRegister::SP => self.sp,
-            WideRegister::BC => self.bc.into(),
-            WideRegister::AF => self.af.into(),
-            WideRegister::DE => self.de.into(),
-            WideRegister::HL => self.hl.into(),
+            R16::PC => self.pc,
+            R16::SP => self.sp,
+            R16::BC => self.bc.into(),
+            R16::AF => self.af.into(),
+            R16::DE => self.de.into(),
+            R16::HL => self.hl.into(),
         }
     }
 
-    pub fn write_r16(&mut self, reg: WideRegister, value: u16) {
+    pub fn write_r16(&mut self, reg: R16, value: u16) {
         match reg {
-            WideRegister::PC => self.pc = value,
-            WideRegister::SP => self.sp = value,
-            WideRegister::BC => self.bc = RegisterPair::from(value),
-            WideRegister::AF => self.af = RegisterPair::from(value),
-            WideRegister::DE => self.de = RegisterPair::from(value),
-            WideRegister::HL => self.hl = RegisterPair::from(value),
+            R16::PC => self.pc = value,
+            R16::SP => self.sp = value,
+            R16::BC => self.bc = RegisterPair::from(value),
+            R16::AF => self.af = RegisterPair::from(value),
+            R16::DE => self.de = RegisterPair::from(value),
+            R16::HL => self.hl = RegisterPair::from(value),
         }
     }
 
