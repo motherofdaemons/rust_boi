@@ -1,0 +1,4 @@
+
+
+pub const GAMEBOY_SCREEN_WIDTH: u32 = 160;
+pub const GAMEBOY_SCREEN_HEIGHT: u32 = 144;

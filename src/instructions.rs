@@ -181,6 +181,18 @@ fn ld_ff00_imm8_r8(
     memory.write_u8(address, value);
 }
 
+fn ld_ff00_r8_imm8(
+    registers: &mut Registers,
+    memory: &mut GameBoyState,
+    additional: &InstructionData,
+) {
+    registers.inc_pc(1);
+    let address = 0xFF00 + memory.read_u8(registers.get_pc()) as u16;
+    registers.inc_pc(1);
+    let value = memory.read_u8(address);
+    registers.write_r8(additional.r8_dst.unwrap(), value);
+}
+
 fn ld_ff00_r8_r8(
     registers: &mut Registers,
     memory: &mut GameBoyState,
@@ -1047,7 +1059,7 @@ impl Instruction {
             0xED => None,
             0xEE => None,
             0xEF => instr!(byte, "rst 5", 4, rst_n, InstructionData::new().rst_code(0x28)),
-            0xF0 => None,
+            0xF0 => instr!(byte, "ld a, (a8)", 3, ld_ff00_r8_imm8, InstructionData::new().r8_dst(R8::A)),
             0xF1 => instr!(byte, "pop af", 3, pop_r16, InstructionData::new().r16_dst(R16::AF)),
             0xF2 => None,
             0xF3 => None,

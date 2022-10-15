@@ -4,6 +4,8 @@ mod instruction_data;
 mod instructions;
 mod memory;
 mod registers;
+mod ppu;
+mod sdl;
 
 use log::info;
 
@@ -19,6 +21,6 @@ fn main() {
     let boot_rom = RomChunk::new(Some(Path::new("roms/dmg_rom.bin"))).unwrap();
     // let cart_rom = RomChunk::new(Some(Path::new("roms/Tetris.gb"))).unwrap();
     let cart_rom = RomChunk::new(None).unwrap();
-    let mut gb = GameBoy::new(boot_rom, cart_rom);
-    gb.run();
+    let gameboy = GameBoy::new(boot_rom, cart_rom);
+    sdl::run(gameboy);
 }
