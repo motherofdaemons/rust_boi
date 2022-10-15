@@ -63,7 +63,7 @@ pub fn jump_immediate(
     }
 }
 
-pub fn jump_relative_immediate(
+pub fn jump_rel_imm8(
     registers: &mut Registers,
     memory: &mut GameBoyState,
     additional: &InstructionData,
@@ -74,14 +74,20 @@ pub fn jump_relative_immediate(
     {
         //Get the relative jump we want to make and make it
         let rel = memory.read_u8(registers.get_pc());
+        registers.inc_pc(1);
         let neg = rel & 0x80 == 0x80;
         let pc = registers.get_pc();
         //Not sure if this should wrap around but I assume it can
         //Should probably google this more
         let new_pc = match neg {
-            true => pc.wrapping_sub(!rel as u16),
+            //if we are negative we take the two compliement to get a positive represenation and subtract since everything is done with unsigned values
+            true => pc.wrapping_sub((!rel + 1) as u16),
             false => pc.wrapping_add(rel as u16),
         };
+        info!(
+            "Jumping from pc: {:x} by rel: {:x} to {:x}",
+            pc, rel, new_pc
+        );
         registers.set_pc(new_pc);
     } else {
         //If we don't follow the jump advance pc by one more
@@ -285,7 +291,7 @@ fn cp_indir_r16(
     );
 }
 
-fn cp_imm8(registers: &mut Registers, memory: &mut GameBoyState, additional: &InstructionData) {
+fn cp_imm8(registers: &mut Registers, memory: &mut GameBoyState, _additional: &InstructionData) {
     registers.inc_pc(1);
     let a = registers.read_r8(R8::A);
     let value = memory.read_u8(registers.get_pc());
@@ -825,7 +831,7 @@ impl Instruction {
             0x15 => instr!(byte, "dec d", 1, dec_r8, InstructionData::new().r8_dst(R8::D)),
             0x16 => instr!(byte, "ld d, d8", 2, ld_r8_imm8, InstructionData::new().r8_dst(R8::D)),
             0x17 => instr!(byte, "rla", 1, rla, InstructionData::new()),
-            0x18 => instr!(byte, "jr s8", 3, jump_relative_immediate, InstructionData::new().with_flags(0, 0)),
+            0x18 => instr!(byte, "jr s8", 3, jump_rel_imm8, InstructionData::new().with_flags(0, 0)),
             0x19 => None,
             0x1A => instr!(byte, "ld a, (de)", 2, ld_r8_indir_r16, InstructionData::new().r8_dst(R8::A).r16_src(R16::DE)),
             0x1B => instr!(byte, "dec de", 2, dec_r16, InstructionData::new().r16_dst(R16::DE)),
@@ -833,7 +839,7 @@ impl Instruction {
             0x1D => instr!(byte, "dec e", 1, dec_r8, InstructionData::new().r8_dst(R8::E)),
             0x1E => instr!(byte, "ld e, d8", 2, ld_r8_imm8, InstructionData::new().r8_dst(R8::E)),
             0x1F => None,
-            0x20 => instr!(byte, "jr nz, s8", 3, jump_relative_immediate, InstructionData::new().with_flags(ZERO_FLAG, 0)),
+            0x20 => instr!(byte, "jr nz, s8", 3, jump_rel_imm8, InstructionData::new().with_flags(ZERO_FLAG, 0)),
             0x21 => instr!(byte, "ld hl, d16", 3, ld_r16_imm16, InstructionData::new().r16_dst(R16::HL)),
             0x22 => instr!(byte, "ld (hl+), a", 2, ldi_indir_r16_r8, InstructionData::new().r8_src(R8::A).r16_dst(R16::HL)),
             0x23 => instr!(byte, "inc hl", 2, inc_r16, InstructionData::new().r16_dst(R16::HL)),
@@ -841,7 +847,7 @@ impl Instruction {
             0x25 => instr!(byte, "dec h", 1, dec_r8, InstructionData::new().r8_dst(R8::H)),
             0x26 => instr!(byte, "ld h, d8", 2, ld_r8_imm8, InstructionData::new().r8_dst(R8::H)),
             0x27 => None,
-            0x28 => instr!(byte, "jr z, s8", 3, jump_relative_immediate, InstructionData::new().with_flags(ZERO_FLAG, ZERO_FLAG)),
+            0x28 => instr!(byte, "jr z, s8", 3, jump_rel_imm8, InstructionData::new().with_flags(ZERO_FLAG, ZERO_FLAG)),
             0x29 => None,
             0x2A => None,
             0x2B => instr!(byte, "dec hl", 2, dec_r16, InstructionData::new().r16_dst(R16::HL)),
@@ -849,7 +855,7 @@ impl Instruction {
             0x2D => instr!(byte, "dec l", 1, dec_r8, InstructionData::new().r8_dst(R8::L)),
             0x2E => instr!(byte, "ld l, d8", 2, ld_r8_imm8, InstructionData::new().r8_dst(R8::L)),
             0x2F => None,
-            0x30 => instr!(byte, "jr nc, s8", 3, jump_relative_immediate, InstructionData::new().with_flags(CARRY_FLAG, 0)),
+            0x30 => instr!(byte, "jr nc, s8", 3, jump_rel_imm8, InstructionData::new().with_flags(CARRY_FLAG, 0)),
             0x31 => instr!(byte, "ld sp, d16", 3, ld_r16_imm16, InstructionData::new().r16_dst(R16::SP)),
             0x32 => instr!(byte, "ld (hl-), a", 2, ldd_indir_r16_r8, InstructionData::new().r8_src(R8::A).r16_dst(R16::HL)),
             0x33 => instr!(byte, "inc sp", 2, inc_r16, InstructionData::new().r16_dst(R16::SP)),
@@ -857,7 +863,7 @@ impl Instruction {
             0x35 => None,
             0x36 => None,
             0x37 => None,
-            0x38 => instr!(byte, "jr s8", 3, jump_relative_immediate, InstructionData::new().with_flags(CARRY_FLAG, CARRY_FLAG)),
+            0x38 => instr!(byte, "jr s8", 3, jump_rel_imm8, InstructionData::new().with_flags(CARRY_FLAG, CARRY_FLAG)),
             0x39 => None,
             0x3A => None,
             0x3B => instr!(byte, "dec sp", 2, dec_r16, InstructionData::new().r16_dst(R16::SP)),
