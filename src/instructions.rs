@@ -185,6 +185,18 @@ fn ld_ff00_r8_r8(
     let address = 0xFF00 + registers.read_r8(additional.r8_dst.unwrap()) as u16;
     memory.write_u8(address, value);
 }
+
+fn ld_indir_imm16_r8(
+    registers: &mut Registers,
+    memory: &mut GameBoyState,
+    additional: &InstructionData,
+) {
+    registers.inc_pc(1);
+    let value = registers.read_r8(additional.r8_src.unwrap());
+    let address = memory.read_u16(registers.get_pc());
+    registers.inc_pc(2);
+    memory.write_u8(address, value);
+}
 //Bit logic funcitons
 fn and(registers: &mut Registers, memory: &mut GameBoyState, additional: &InstructionData) {
     registers.inc_pc(1);
@@ -255,7 +267,11 @@ fn cp_r8(registers: &mut Registers, _memory: &mut GameBoyState, additional: &Ins
     );
 }
 
-fn cp_indir_r16(registers: &mut Registers, memory: &mut GameBoyState, additional: &InstructionData) {
+fn cp_indir_r16(
+    registers: &mut Registers,
+    memory: &mut GameBoyState,
+    additional: &InstructionData,
+) {
     registers.inc_pc(1);
     let a = registers.read_r8(R8::A);
     let address = registers.read_r16(additional.r16_src.unwrap());
@@ -1019,7 +1035,7 @@ impl Instruction {
             0xE7 => instr!(byte, "rst 4", 4, rst_n, InstructionData::new().rst_code(0x20)),
             0xE8 => None,
             0xE9 => None,
-            0xEA => None,
+            0xEA => instr!(byte, "ld (a16), a", 4, ld_indir_imm16_r8, InstructionData::new().r8_src(R8::A)),
             0xEB => None,
             0xEC => None,
             0xED => None,
