@@ -1,7 +1,7 @@
-use sdl2::{event::Event, keyboard::Keycode, pixels::PixelFormatEnum, sys::KeyCode, EventPump};
+use sdl2::{event::Event, keyboard::Keycode, pixels::PixelFormatEnum, EventPump};
 
 use crate::{
-    game_boy::GameBoy,
+    gameboy::GameBoy,
     ppu::{GAMEBOY_SCREEN_HEIGHT, GAMEBOY_SCREEN_WIDTH},
 };
 
@@ -41,11 +41,14 @@ pub fn run(mut gameboy: GameBoy) {
             GAMEBOY_SCREEN_HEIGHT,
         )
         .unwrap();
-    let mut pixel_buffer =
+    let mut pixel_data =
         vec![0; GAMEBOY_SCREEN_WIDTH as usize * GAMEBOY_SCREEN_HEIGHT as usize * 3];
     loop {
         //handle events
         handle_events(&mut event_pump);
-        gameboy.step();
+        gameboy.step(&mut pixel_data);
+
+        //redraw the screen 
+        // texture.update(rect, pixel_data, )
     }
 }

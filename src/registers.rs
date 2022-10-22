@@ -8,6 +8,7 @@ pub struct Registers {
     af: RegisterPair,
     de: RegisterPair,
     hl: RegisterPair,
+    pub cycles: u16,
 }
 
 #[derive(Copy, Clone, Default, Debug)]

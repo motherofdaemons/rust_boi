@@ -25,6 +25,8 @@ impl Cpu {
         if let Some(instruction) = Instruction::from_byte(opcode, prefixed) {
             info!("Excuting instruction {}", instruction);
             info!("{:X?}", self.registers);
+            //Set the number of cycles the instruction will take note that some instructions will edit this later
+            self.registers.cycles = instruction.cycles;
             (instruction.execute)(&mut self.registers, memory);
         } else {
             let description = format!("0x{}{:x}", if prefixed { "cb" } else { "" }, opcode);

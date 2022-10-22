@@ -8,7 +8,7 @@ use crate::registers::{Registers, CARRY_FLAG, R16, R8, ZERO_FLAG};
 pub struct Instruction {
     pub opcode: u8,
     pub execute: fn(registers: &mut Registers, memory: &mut GameBoyState),
-    pub cycles: u8,
+    pub cycles: u16,
     pub text: String,
 }
 

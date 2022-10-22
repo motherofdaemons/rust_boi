@@ -1,5 +1,5 @@
 mod cpu;
-mod game_boy;
+mod gameboy;
 mod instruction_data;
 mod instructions;
 mod memory;
@@ -9,7 +9,7 @@ mod sdl;
 
 use log::info;
 
-use crate::{game_boy::GameBoy, memory::RomChunk};
+use crate::{gameboy::GameBoy, memory::RomChunk};
 
 use std::{error, path::Path};
 
