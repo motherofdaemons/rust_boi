@@ -1,7 +1,7 @@
-use log::info;
+use log::{info, trace};
 
 use crate::instructions::Instruction;
-use crate::memory::GameBoyState;
+use crate::memory::Memory;
 use crate::registers::Registers;
 pub struct Cpu {
     pub registers: Registers,
@@ -14,19 +14,22 @@ impl Cpu {
         }
     }
 
-    pub fn step(&mut self, memory: &mut GameBoyState) {
+    pub fn step(&mut self, memory: &mut Memory) {
         let mut opcode = memory.read_u8(self.registers.get_pc());
         let prefixed = opcode == 0xCB;
         if prefixed {
             opcode = memory.read_u8(self.registers.get_pc() + 1);
-            self.registers.inc_pc(1);
         }
 
         if let Some(instruction) = Instruction::from_byte(opcode, prefixed) {
-            info!("Excuting instruction {}", instruction);
-            info!("{:X?}", self.registers);
+            info!(
+                "Excuting pc {:x} instruction {}",
+                self.registers.get_pc(),
+                instruction
+            );
+            trace!("{:X?}", self.registers);
             //Set the number of cycles the instruction will take note that some instructions will edit this later
-            self.registers.cycles = instruction.cycles;
+            memory.cpu_cycles = instruction.cycles;
             (instruction.execute)(&mut self.registers, memory);
         } else {
             let description = format!("0x{}{:x}", if prefixed { "cb" } else { "" }, opcode);

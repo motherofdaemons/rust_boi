@@ -16,12 +16,13 @@ const START_OF_INTERNAL_RAM: u16 = 0xC000;
 const END_OF_INTERNAL_RAM: u16 = 0xDFFF;
 const START_OF_ECHO_RAM: u16 = 0xE000;
 const END_OF_ECHO_RAM: u16 = 0xFDFF;
+const START_OF_HIGH_RAM: u16 = 0xFE00;
 
 const ROM_BANK_SIZE: usize = 0x4000;
 const GAMEPAD_ADDRESS: u16 = 0xFF00;
 const BOOT_ROM_ADDRESS: u16 = 0xFF50;
 
-pub struct GameBoyState {
+pub struct Memory {
     boot: RomChunk,
     cart_bank_0: RomChunk,
     cart_bank_n: RomChunk,
@@ -30,6 +31,7 @@ pub struct GameBoyState {
     iram: RamChunk,
     high_ram: RamChunk,
     boot_enabled: bool,
+    pub cpu_cycles: u16,
 }
 
 pub struct RomChunk {
@@ -40,7 +42,7 @@ struct RamChunk {
     bytes: Vec<u8>,
 }
 
-impl GameBoyState {
+impl Memory {
     pub fn new(boot: RomChunk, cart: RomChunk) -> Self {
         // Split the cart into the fixed and variable banks
         let mut cart_bank_0 = RomChunk::new_empty(ROM_BANK_SIZE);
@@ -60,6 +62,7 @@ impl GameBoyState {
             iram: RamChunk::new(RAM_BANK_SIZE),
             high_ram: RamChunk::new(0x200),
             boot_enabled: true,
+            cpu_cycles: 0,
         }
     }
 
@@ -83,7 +86,7 @@ impl GameBoyState {
                 self.iram.read_u8(address - START_OF_INTERNAL_RAM)
             }
             START_OF_ECHO_RAM..=END_OF_ECHO_RAM => todo!(),
-            _ => self.high_ram.read_u8(address - END_OF_ECHO_RAM),
+            _ => self.high_ram.read_u8(address - START_OF_HIGH_RAM),
         }
     }
 
@@ -122,12 +125,19 @@ impl GameBoyState {
         self.write_u8(address, lower as u8);
     }
 
+    pub fn write_special_regsiter(&mut self, address: u16, value: u8) {
+        if address > END_OF_ECHO_RAM {
+            self.high_ram.write_u8(address - START_OF_HIGH_RAM, value);
+        } else {
+            panic!("Can't write a special register: {:x}", address);
+        }
+    }
     fn write_high_mem(&mut self, address: u16, value: u8) {
         //There are some high bits that when we write them we won't to change some variables
         if address == BOOT_ROM_ADDRESS {
             self.boot_enabled = false;
         }
-        self.high_ram.write_u8(address - END_OF_ECHO_RAM, value);
+        self.high_ram.write_u8(address - START_OF_HIGH_RAM, value);
     }
 }
 
@@ -136,7 +146,9 @@ impl RomChunk {
         if let Some(rom_path) = rom_path {
             Self::from_file(rom_path)
         } else {
-            Ok( Self { bytes: vec![0; ROM_BANK_SIZE * 2] })
+            Ok(Self {
+                bytes: vec![0; ROM_BANK_SIZE * 2],
+            })
         }
     }
 

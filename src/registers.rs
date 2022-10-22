@@ -1,4 +1,4 @@
-use crate::memory::GameBoyState;
+use crate::memory::Memory;
 
 #[derive(Default, Debug)]
 pub struct Registers {
@@ -8,13 +8,12 @@ pub struct Registers {
     af: RegisterPair,
     de: RegisterPair,
     hl: RegisterPair,
-    pub cycles: u16,
 }
 
 #[derive(Copy, Clone, Default, Debug)]
 pub struct RegisterPair {
-    pub l: u8,
-    pub r: u8,
+    pub high: u8,
+    pub low: u8,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -98,34 +97,34 @@ impl Registers {
         self.get_flags() & CARRY_FLAG == CARRY_FLAG
     }
 
-    pub fn read_r8(&self, reg: R8) -> u8 {
-        match reg {
-            R8::B => self.bc.l,
-            R8::C => self.bc.r,
-            R8::A => self.af.l,
-            R8::F => self.af.r,
-            R8::D => self.de.l,
-            R8::E => self.de.r,
-            R8::H => self.hl.l,
-            R8::L => self.hl.r,
+    pub fn read_r8(&self, register: R8) -> u8 {
+        match register {
+            R8::B => self.bc.high,
+            R8::C => self.bc.low,
+            R8::A => self.af.high,
+            R8::F => self.af.low,
+            R8::D => self.de.high,
+            R8::E => self.de.low,
+            R8::H => self.hl.high,
+            R8::L => self.hl.low,
         }
     }
 
-    pub fn write_r8(&mut self, reg: R8, value: u8) {
-        match reg {
-            R8::B => self.bc.l = value,
-            R8::C => self.bc.r = value,
-            R8::A => self.af.l = value,
-            R8::F => self.af.r = value,
-            R8::D => self.de.l = value,
-            R8::E => self.de.r = value,
-            R8::H => self.hl.l = value,
-            R8::L => self.hl.r = value,
+    pub fn write_r8(&mut self, register: R8, value: u8) {
+        match register {
+            R8::B => self.bc.high = value,
+            R8::C => self.bc.low = value,
+            R8::A => self.af.high = value,
+            R8::F => self.af.low = value,
+            R8::D => self.de.high = value,
+            R8::E => self.de.low = value,
+            R8::H => self.hl.high = value,
+            R8::L => self.hl.low = value,
         }
     }
 
-    pub fn read_r16(&self, reg: R16) -> u16 {
-        match reg {
+    pub fn read_r16(&self, register: R16) -> u16 {
+        match register {
             R16::PC => self.pc,
             R16::SP => self.sp,
             R16::BC => self.bc.into(),
@@ -135,8 +134,8 @@ impl Registers {
         }
     }
 
-    pub fn write_r16(&mut self, reg: R16, value: u16) {
-        match reg {
+    pub fn write_r16(&mut self, register: R16, value: u16) {
+        match register {
             R16::PC => self.pc = value,
             R16::SP => self.sp = value,
             R16::BC => self.bc = RegisterPair::from(value),
@@ -147,17 +146,22 @@ impl Registers {
     }
 
     // Stack goodness
-    pub fn stack_push16(&mut self, value: u16, memory: &mut GameBoyState) {
-        let new_sp = self.sp - 2;
-        memory.write_u16(new_sp, value);
-        self.sp = new_sp;
+    pub fn stack_push16(&mut self, value: u16, memory: &mut Memory) {
+        self.sp -= 1;
+        let higher = ((0xFF00 & value) >> 8) as u8;
+        memory.write_u8(self.sp, higher);
+        self.sp -= 1;
+        let lower = (0x00FF & value) as u8;
+        memory.write_u8(self.sp, lower);
     }
-    pub fn stack_pop16(&mut self, memory: &mut GameBoyState) -> u16 {
-        let value = memory.read_u16(self.sp);
-        self.sp += 2;
-        value
+    pub fn stack_pop16(&mut self, memory: &mut Memory) -> u16 {
+        let lower = memory.read_u8(self.sp) as u16;
+        self.sp += 1;
+        let higher = memory.read_u8(self.sp) as u16;
+        self.sp += 1;
+        (higher << 8) | lower
     }
-    pub fn stack_peek16(&self, memory: &GameBoyState) -> u16 {
+    pub fn stack_peek16(&self, memory: &Memory) -> u16 {
         let lower = memory.read_u8(self.sp);
         let upper = memory.read_u8(self.sp + 1);
         ((upper as u16) << 8) | (lower as u16)
@@ -167,14 +171,14 @@ impl Registers {
 impl From<u16> for RegisterPair {
     fn from(value: u16) -> RegisterPair {
         Self {
-            l: (value >> 8) as u8,
-            r: (value & 0xFF) as u8,
+            high: (value >> 8) as u8,
+            low: (value & 0xFF) as u8,
         }
     }
 }
 
 impl From<RegisterPair> for u16 {
     fn from(value: RegisterPair) -> u16 {
-        (value.l as u16) << 8 | value.r as u16
+        (value.high as u16) << 8 | value.low as u16
     }
 }

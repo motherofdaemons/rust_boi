@@ -1,13 +1,13 @@
-use log::info;
+use log::{info, trace};
 use std::fmt::Display;
 
 use crate::instruction_data::InstructionData;
-use crate::memory::GameBoyState;
+use crate::memory::Memory;
 use crate::registers::{Registers, CARRY_FLAG, R16, R8, ZERO_FLAG};
 
 pub struct Instruction {
     pub opcode: u8,
-    pub execute: fn(registers: &mut Registers, memory: &mut GameBoyState),
+    pub execute: fn(registers: &mut Registers, memory: &mut Memory),
     pub cycles: u16,
     pub text: String,
 }
@@ -25,8 +25,8 @@ impl Display for Instruction {
 macro_rules! instr {
     ($op:expr, $name:expr, $cycles:expr, $method:ident, $additional:expr) => {{
         const INSTRUCTION_DATA: InstructionData = $additional;
-        fn evaluate(registers: &mut Registers, memory: &mut GameBoyState) {
-            info!("{:X?}", INSTRUCTION_DATA);
+        fn evaluate(registers: &mut Registers, memory: &mut Memory) {
+            trace!("{:X?}", INSTRUCTION_DATA);
             $method(registers, memory, &INSTRUCTION_DATA);
         }
         Some(Instruction {
@@ -42,32 +42,32 @@ fn check_for_half_carry(prev: u8, res: u8) -> bool {
     (prev & 0xF) + (res & 0xF) > 0xF
 }
 
-pub fn no_op(registers: &mut Registers, _memory: &mut GameBoyState, _additional: &InstructionData) {
+pub fn no_op(registers: &mut Registers, _memory: &mut Memory, _additional: &InstructionData) {
     registers.inc_pc(1);
 }
 
 pub fn jump_immediate(
     registers: &mut Registers,
-    memory: &mut GameBoyState,
+    memory: &mut Memory,
     additional: &InstructionData,
 ) {
+    registers.inc_pc(1);
     //should we jump mask out the flag we are checking for and see if it is a go
     if (registers.get_flags() & additional.flag_mask.unwrap()) == additional.flag_expected.unwrap()
     {
         //immediate jump get the address immediately after the pc
-        let target_address = memory.read_u16(registers.get_pc() + 1);
+        let target_address = memory.read_u16(registers.get_pc());
         registers.set_pc(target_address);
     //if we don't jump we need to increment the pc by 3 for the width of the jump op
     } else {
-        registers.inc_pc(3);
+        //If we don't jump skip over the address
+        registers.inc_pc(2);
+        //only 3 cycles on non jump
+        memory.cpu_cycles = 3;
     }
 }
 
-pub fn jump_rel_imm8(
-    registers: &mut Registers,
-    memory: &mut GameBoyState,
-    additional: &InstructionData,
-) {
+pub fn jump_rel_imm8(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     //If we want to follow the jump
     if (registers.get_flags() & additional.flag_mask.unwrap()) == additional.flag_expected.unwrap()
@@ -84,73 +84,57 @@ pub fn jump_rel_imm8(
             true => pc.wrapping_sub((!rel + 1) as u16),
             false => pc.wrapping_add(rel as u16),
         };
-        info!(
+        trace!(
             "Jumping from pc: {:x} by rel: {:x} to {:x}",
-            pc, rel, new_pc
+            pc,
+            rel,
+            new_pc
         );
         registers.set_pc(new_pc);
     } else {
         //If we don't follow the jump advance pc by one more
         registers.inc_pc(1);
+        //Also it only takes 2 cycles if not taking branch
+        memory.cpu_cycles = 2;
     }
 }
-fn ld_r8_r8(registers: &mut Registers, _memory: &mut GameBoyState, additional: &InstructionData) {
+fn ld_r8_r8(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let value = registers.read_r8(additional.r8_src.unwrap());
     registers.write_r8(additional.r8_dst.unwrap(), value);
 }
-fn ld_r8_indir_r16(
-    registers: &mut Registers,
-    memory: &mut GameBoyState,
-    additional: &InstructionData,
-) {
+fn ld_r8_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let address = registers.read_r16(additional.r16_src.unwrap());
     let value = memory.read_u8(address);
     registers.write_r8(additional.r8_dst.unwrap(), value);
 }
-fn ld_r8_imm8(registers: &mut Registers, memory: &mut GameBoyState, additional: &InstructionData) {
+fn ld_r8_imm8(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let value = memory.read_u8(registers.get_pc());
     registers.inc_pc(1);
     registers.write_r8(additional.r8_dst.unwrap(), value);
 }
-fn ld_r16_imm16(
-    registers: &mut Registers,
-    memory: &mut GameBoyState,
-    additional: &InstructionData,
-) {
+fn ld_r16_imm16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let value = memory.read_u16(registers.get_pc());
     registers.inc_pc(2);
     registers.write_r16(additional.r16_dst.unwrap(), value);
 }
-fn ld_indir_r16_r8(
-    registers: &mut Registers,
-    memory: &mut GameBoyState,
-    additional: &InstructionData,
-) {
+fn ld_indir_r16_r8(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let value = registers.read_r8(additional.r8_src.unwrap());
     let address = registers.read_r16(additional.r16_dst.unwrap());
     memory.write_u8(address, value);
 }
-fn ldi_indir_r16_r8(
-    registers: &mut Registers,
-    memory: &mut GameBoyState,
-    additional: &InstructionData,
-) {
+fn ldi_indir_r16_r8(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let value = registers.read_r8(additional.r8_src.unwrap());
     let address = registers.read_r16(additional.r16_dst.unwrap());
     memory.write_u8(address, value);
     registers.write_r16(additional.r16_dst.unwrap(), address.wrapping_add(1));
 }
-fn ldd_indir_r16_r8(
-    registers: &mut Registers,
-    memory: &mut GameBoyState,
-    additional: &InstructionData,
-) {
+fn ldd_indir_r16_r8(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let value = registers.read_r8(additional.r8_src.unwrap());
     let address = registers.read_r16(additional.r16_dst.unwrap());
@@ -159,7 +143,7 @@ fn ldd_indir_r16_r8(
 }
 fn ld_indir_imm16_sp(
     registers: &mut Registers,
-    memory: &mut GameBoyState,
+    memory: &mut Memory,
     _additional: &InstructionData,
 ) {
     registers.inc_pc(1);
@@ -169,11 +153,7 @@ fn ld_indir_imm16_sp(
     memory.write_u16(address, value);
 }
 
-fn ld_ff00_imm8_r8(
-    registers: &mut Registers,
-    memory: &mut GameBoyState,
-    additional: &InstructionData,
-) {
+fn ld_ff00_imm8_r8(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let address = 0xFF00 + memory.read_u8(registers.get_pc()) as u16;
     registers.inc_pc(1);
@@ -181,11 +161,7 @@ fn ld_ff00_imm8_r8(
     memory.write_u8(address, value);
 }
 
-fn ld_ff00_r8_imm8(
-    registers: &mut Registers,
-    memory: &mut GameBoyState,
-    additional: &InstructionData,
-) {
+fn ld_ff00_r8_imm8(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let address = 0xFF00 + memory.read_u8(registers.get_pc()) as u16;
     registers.inc_pc(1);
@@ -193,22 +169,14 @@ fn ld_ff00_r8_imm8(
     registers.write_r8(additional.r8_dst.unwrap(), value);
 }
 
-fn ld_ff00_r8_r8(
-    registers: &mut Registers,
-    memory: &mut GameBoyState,
-    additional: &InstructionData,
-) {
+fn ld_ff00_r8_r8(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let value = registers.read_r8(additional.r8_src.unwrap());
     let address = 0xFF00 + registers.read_r8(additional.r8_dst.unwrap()) as u16;
     memory.write_u8(address, value);
 }
 
-fn ld_indir_imm16_r8(
-    registers: &mut Registers,
-    memory: &mut GameBoyState,
-    additional: &InstructionData,
-) {
+fn ld_indir_imm16_r8(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let value = registers.read_r8(additional.r8_src.unwrap());
     let address = memory.read_u16(registers.get_pc());
@@ -216,14 +184,14 @@ fn ld_indir_imm16_r8(
     memory.write_u8(address, value);
 }
 //Bit logic funcitons
-fn and(registers: &mut Registers, memory: &mut GameBoyState, additional: &InstructionData) {
+fn and(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
-    if let Some(reg) = additional.r8_src {
-        let res = registers.read_r8(R8::A) & registers.read_r8(reg);
+    if let Some(register) = additional.r8_src {
+        let res = registers.read_r8(R8::A) & registers.read_r8(register);
         registers.write_r8(R8::A, res);
         registers.set_flags(Some(res == 0), Some(false), Some(true), Some(false));
-    } else if let Some(reg) = additional.r16_src {
-        let address = registers.read_r16(reg);
+    } else if let Some(register) = additional.r16_src {
+        let address = registers.read_r16(register);
         let value = memory.read_u8(address);
         let res = registers.read_r8(R8::A) & value;
         registers.write_r8(R8::A, res);
@@ -233,36 +201,32 @@ fn and(registers: &mut Registers, memory: &mut GameBoyState, additional: &Instru
     }
 }
 
-fn xor_r8(registers: &mut Registers, _memory: &mut GameBoyState, additional: &InstructionData) {
+fn xor_r8(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
-    let reg = additional.r8_src.unwrap();
-    let res = registers.read_r8(R8::A) ^ registers.read_r8(reg);
+    let register = additional.r8_src.unwrap();
+    let res = registers.read_r8(R8::A) ^ registers.read_r8(register);
     registers.write_r8(R8::A, res);
     registers.set_flags(Some(res == 0), Some(false), Some(false), Some(false));
 }
 
-fn xor_indir_r16(
-    registers: &mut Registers,
-    memory: &mut GameBoyState,
-    additional: &InstructionData,
-) {
+fn xor_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
-    let reg = additional.r16_src.unwrap();
-    let address = registers.read_r16(reg);
+    let register = additional.r16_src.unwrap();
+    let address = registers.read_r16(register);
     let value = memory.read_u8(address);
     let res = registers.read_r8(R8::A) ^ value;
     registers.write_r8(R8::A, res);
     registers.set_flags(Some(res == 0), Some(false), Some(false), Some(false));
 }
 
-fn or(registers: &mut Registers, memory: &mut GameBoyState, additional: &InstructionData) {
+fn or(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
-    if let Some(reg) = additional.r8_src {
-        let res = registers.read_r8(R8::A) | registers.read_r8(reg);
+    if let Some(register) = additional.r8_src {
+        let res = registers.read_r8(R8::A) | registers.read_r8(register);
         registers.write_r8(R8::A, res);
         registers.set_flags(Some(res == 0), Some(false), Some(false), Some(false));
-    } else if let Some(reg) = additional.r16_src {
-        let address = registers.read_r16(reg);
+    } else if let Some(register) = additional.r16_src {
+        let address = registers.read_r16(register);
         let value = memory.read_u8(address);
         let res = registers.read_r8(R8::A) | value;
         registers.write_r8(R8::A, res);
@@ -272,7 +236,7 @@ fn or(registers: &mut Registers, memory: &mut GameBoyState, additional: &Instruc
     }
 }
 
-fn cp_r8(registers: &mut Registers, _memory: &mut GameBoyState, additional: &InstructionData) {
+fn cp_r8(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let a = registers.read_r8(R8::A);
     let value = registers.read_r8(additional.r8_src.unwrap());
@@ -285,11 +249,7 @@ fn cp_r8(registers: &mut Registers, _memory: &mut GameBoyState, additional: &Ins
     );
 }
 
-fn cp_indir_r16(
-    registers: &mut Registers,
-    memory: &mut GameBoyState,
-    additional: &InstructionData,
-) {
+fn cp_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let a = registers.read_r8(R8::A);
     let address = registers.read_r16(additional.r16_src.unwrap());
@@ -303,10 +263,13 @@ fn cp_indir_r16(
     );
 }
 
-fn cp_imm8(registers: &mut Registers, memory: &mut GameBoyState, _additional: &InstructionData) {
+fn cp_imm8(registers: &mut Registers, memory: &mut Memory, _additional: &InstructionData) {
     registers.inc_pc(1);
     let a = registers.read_r8(R8::A);
     let value = memory.read_u8(registers.get_pc());
+    if a == 144 {
+        println!("here");
+    }
     registers.inc_pc(1);
     let (res, carried) = a.overflowing_sub(value);
     registers.set_flags(
@@ -318,14 +281,14 @@ fn cp_imm8(registers: &mut Registers, memory: &mut GameBoyState, _additional: &I
 }
 
 //Arithmetic functions
-fn add(registers: &mut Registers, memory: &mut GameBoyState, additional: &InstructionData) {
+fn add(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let lhs = registers.read_r8(R8::A);
     let rhs: u8;
-    if let Some(reg) = additional.r8_src {
-        rhs = registers.read_r8(reg);
-    } else if let Some(reg) = additional.r16_src {
-        let address = registers.read_r16(reg);
+    if let Some(register) = additional.r8_src {
+        rhs = registers.read_r8(register);
+    } else if let Some(register) = additional.r16_src {
+        let address = registers.read_r16(register);
         rhs = memory.read_u8(address);
     } else {
         panic!("Didn't know how to handle add with {:?}", additional);
@@ -340,14 +303,14 @@ fn add(registers: &mut Registers, memory: &mut GameBoyState, additional: &Instru
     registers.write_r8(R8::A, res);
 }
 
-fn add_carry(registers: &mut Registers, memory: &mut GameBoyState, additional: &InstructionData) {
+fn add_carry(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let lhs = registers.read_r8(R8::A);
     let rhs;
-    if let Some(reg) = additional.r8_src {
-        rhs = registers.read_r8(reg);
-    } else if let Some(reg) = additional.r16_src {
-        let address = registers.read_r16(reg);
+    if let Some(register) = additional.r8_src {
+        rhs = registers.read_r8(register);
+    } else if let Some(register) = additional.r16_src {
+        let address = registers.read_r16(register);
         rhs = memory.read_u8(address);
     } else {
         panic!("Didn't know how to handle add_carry with {:?}", additional);
@@ -363,12 +326,12 @@ fn add_carry(registers: &mut Registers, memory: &mut GameBoyState, additional: &
     );
 }
 
-fn inc_r8(registers: &mut Registers, _memory: &mut GameBoyState, additional: &InstructionData) {
+fn inc_r8(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
-    let reg = additional.r8_dst.unwrap();
-    let value = registers.read_r8(reg);
+    let register = additional.r8_dst.unwrap();
+    let value = registers.read_r8(register);
     let res = value.wrapping_add(1);
-    registers.write_r8(reg, res);
+    registers.write_r8(register, res);
     registers.set_flags(
         Some(res == 0),
         Some(false),
@@ -377,19 +340,15 @@ fn inc_r8(registers: &mut Registers, _memory: &mut GameBoyState, additional: &In
     );
 }
 
-fn inc_r16(registers: &mut Registers, _memory: &mut GameBoyState, additional: &InstructionData) {
+fn inc_r16(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
-    let reg = additional.r16_dst.unwrap();
-    let value = registers.read_r16(reg);
+    let register = additional.r16_dst.unwrap();
+    let value = registers.read_r16(register);
     let res = value.wrapping_add(1);
-    registers.write_r16(reg, res);
+    registers.write_r16(register, res);
 }
 
-fn inc_indir_r16(
-    registers: &mut Registers,
-    memory: &mut GameBoyState,
-    additional: &InstructionData,
-) {
+fn inc_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let address = registers.read_r16(additional.r16_dst.unwrap());
     let prev = memory.read_u8(address);
@@ -403,14 +362,14 @@ fn inc_indir_r16(
     );
 }
 
-fn sub(registers: &mut Registers, memory: &mut GameBoyState, additional: &InstructionData) {
+fn sub(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let lhs = registers.read_r8(R8::A);
     let mut rhs = 0;
-    if let Some(reg) = additional.r8_src {
-        rhs = registers.read_r8(reg);
-    } else if let Some(reg) = additional.r16_src {
-        let address = registers.read_r16(reg);
+    if let Some(register) = additional.r8_src {
+        rhs = registers.read_r8(register);
+    } else if let Some(register) = additional.r16_src {
+        let address = registers.read_r16(register);
         rhs = memory.read_u8(address);
     }
     let (res, carried) = lhs.overflowing_sub(rhs);
@@ -423,14 +382,14 @@ fn sub(registers: &mut Registers, memory: &mut GameBoyState, additional: &Instru
     );
 }
 
-fn sub_carry(registers: &mut Registers, memory: &mut GameBoyState, additional: &InstructionData) {
+fn sub_carry(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let lhs = registers.read_r8(R8::A);
     let mut rhs = 0;
-    if let Some(reg) = additional.r8_src {
-        rhs = registers.read_r8(reg);
-    } else if let Some(reg) = additional.r16_src {
-        let address = registers.read_r16(reg);
+    if let Some(register) = additional.r8_src {
+        rhs = registers.read_r8(register);
+    } else if let Some(register) = additional.r16_src {
+        let address = registers.read_r16(register);
         rhs = memory.read_u8(address);
     }
     let carry = registers.carry_flag() as u8;
@@ -444,12 +403,13 @@ fn sub_carry(registers: &mut Registers, memory: &mut GameBoyState, additional: &
     );
 }
 
-fn dec_r8(registers: &mut Registers, _memory: &mut GameBoyState, additional: &InstructionData) {
+fn dec_r8(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
-    let reg = additional.r8_dst.unwrap();
-    let value = registers.read_r8(reg);
+    let register = additional.r8_dst.unwrap();
+    let value = registers.read_r8(register);
     let res = value.wrapping_sub(1);
-    registers.write_r8(reg, res);
+    info!("fuck me: {}", res);
+    registers.write_r8(register, res);
     registers.set_flags(
         Some(res == 0),
         Some(true),
@@ -458,39 +418,39 @@ fn dec_r8(registers: &mut Registers, _memory: &mut GameBoyState, additional: &In
     );
 }
 
-fn dec_r16(registers: &mut Registers, _memory: &mut GameBoyState, additional: &InstructionData) {
+fn dec_r16(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
-    let reg = additional.r16_dst.unwrap();
-    let value = registers.read_r16(reg);
+    let register = additional.r16_dst.unwrap();
+    let value = registers.read_r16(register);
     let res = value.wrapping_sub(1);
-    registers.write_r16(reg, res);
+    registers.write_r16(register, res);
 }
 
-fn ret(registers: &mut Registers, memory: &mut GameBoyState, _additional: &InstructionData) {
+fn ret(registers: &mut Registers, memory: &mut Memory, _additional: &InstructionData) {
     registers.inc_pc(1);
     let new_pc = registers.stack_pop16(memory);
     registers.set_pc(new_pc);
 }
 
-fn rst_n(registers: &mut Registers, memory: &mut GameBoyState, additional: &InstructionData) {
+fn rst_n(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     registers.stack_push16(registers.get_pc(), memory);
     registers.set_pc(additional.code.unwrap() as u16);
 }
 
-fn push_r16(registers: &mut Registers, memory: &mut GameBoyState, additional: &InstructionData) {
+fn push_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let value = registers.read_r16(additional.r16_src.unwrap());
     registers.stack_push16(value, memory);
 }
 
-fn pop_r16(registers: &mut Registers, memory: &mut GameBoyState, additional: &InstructionData) {
+fn pop_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let value = registers.stack_pop16(memory);
     registers.write_r16(additional.r16_dst.unwrap(), value);
 }
 
-fn call(registers: &mut Registers, memory: &mut GameBoyState, additional: &InstructionData) {
+fn call(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let address = memory.read_u16(registers.get_pc());
     registers.inc_pc(2);
@@ -498,10 +458,13 @@ fn call(registers: &mut Registers, memory: &mut GameBoyState, additional: &Instr
     {
         registers.stack_push16(registers.get_pc(), memory);
         registers.set_pc(address);
+    } else {
+        // If we don't take the call its only 3 cycles
+        memory.cpu_cycles = 3;
     }
 }
 
-fn rla(registers: &mut Registers, _memory: &mut GameBoyState, _additional: &InstructionData) {
+fn rla(registers: &mut Registers, _memory: &mut Memory, _additional: &InstructionData) {
     registers.inc_pc(1);
     let value = registers.read_r8(R8::A);
     let new_carry = (value & 0x80) >> 7 == 0b1;
@@ -511,29 +474,25 @@ fn rla(registers: &mut Registers, _memory: &mut GameBoyState, _additional: &Inst
 }
 
 // Extended fucntion table functions
-fn ext_rl_r8(registers: &mut Registers, _memory: &mut GameBoyState, additional: &InstructionData) {
-    registers.inc_pc(1);
-    let reg = additional.r8_dst.unwrap();
-    let value = registers.read_r8(reg);
+fn ext_rl_r8(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
+    registers.inc_pc(2);
+    let register = additional.r8_dst.unwrap();
+    let value = registers.read_r8(register);
     let new_carry = (value & 0x80) >> 7 == 0b1;
     let value = (value << 1) | registers.carry_flag() as u8;
-    registers.write_r8(reg, value);
+    registers.write_r8(register, value);
     registers.set_flags(Some(value == 0), Some(false), Some(false), Some(new_carry));
 }
-fn ext_bit_r8(registers: &mut Registers, _memory: &mut GameBoyState, additional: &InstructionData) {
-    registers.inc_pc(1);
+fn ext_bit_r8(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
+    registers.inc_pc(2);
     let value = registers.read_r8(additional.r8_src.unwrap());
     let bit_pos = additional.bit.unwrap();
     let res = (value >> bit_pos) & 0b1;
     registers.set_flags(Some(res == 0), Some(false), Some(true), None);
 }
 
-fn ext_bit_indir_r16(
-    registers: &mut Registers,
-    memory: &mut GameBoyState,
-    additional: &InstructionData,
-) {
-    registers.inc_pc(1);
+fn ext_bit_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+    registers.inc_pc(2);
     let address = registers.read_r16(additional.r16_src.unwrap());
     let value = memory.read_u8(address);
     let selected_bit = 1 << additional.bit.unwrap();
@@ -1014,7 +973,7 @@ impl Instruction {
             0xC0 => None,
             0xC1 => instr!(byte, "pop bc", 3, pop_r16, InstructionData::new().r16_dst(R16::BC)),
             0xC2 => None,
-            0xC3 => instr!(byte, "jp nz", 1, jump_immediate, InstructionData::new().with_flags(ZERO_FLAG, 0)),
+            0xC3 => instr!(byte, "jp nz", 4, jump_immediate, InstructionData::new().with_flags(ZERO_FLAG, 0)),
             0xC4 => instr!(byte, "call nz, a16", 6, call, InstructionData::new().with_flags(ZERO_FLAG, 0)),
             0xC5 => instr!(byte, "push bc", 4, push_r16, InstructionData::new().r16_src(R16::BC)),
             0xC6 => None,

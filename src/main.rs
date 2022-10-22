@@ -2,14 +2,14 @@ mod cpu;
 mod gameboy;
 mod instruction_data;
 mod instructions;
-mod memory;
-mod registers;
 mod ppu;
+mod registers;
 mod sdl;
+mod memory;
 
 use log::info;
 
-use crate::{gameboy::GameBoy, memory::RomChunk};
+use crate::{gameboy::GameBoy, sdl::Emu, memory::RomChunk};
 
 use std::{error, path::Path};
 
@@ -22,5 +22,6 @@ fn main() {
     // let cart_rom = RomChunk::new(Some(Path::new("roms/Tetris.gb"))).unwrap();
     let cart_rom = RomChunk::new(None).unwrap();
     let gameboy = GameBoy::new(boot_rom, cart_rom);
-    sdl::run(gameboy);
+    let mut emu = Emu::new();
+    emu.run(gameboy);
 }

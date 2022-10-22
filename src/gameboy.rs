@@ -1,5 +1,5 @@
 use crate::cpu::Cpu;
-use crate::memory::{GameBoyState, RomChunk};
+use crate::memory::{Memory, RomChunk};
 use crate::ppu::Ppu;
 
 use log::trace;
@@ -7,7 +7,7 @@ use log::trace;
 pub struct GameBoy {
     pub cpu: Cpu,
     pub ppu: Ppu,
-    pub memory: GameBoyState,
+    pub memory: Memory,
 }
 
 impl GameBoy {
@@ -16,13 +16,13 @@ impl GameBoy {
         Self {
             cpu: Cpu::new(),
             ppu: Ppu::new(),
-            memory: GameBoyState::new(boot_rom, cart_rom),
+            memory: Memory::new(boot_rom, cart_rom),
         }
     }
 
-    pub fn step(&mut self, pixel_buffer: &mut [u8]) {
+    pub fn step(&mut self, pixel_data: &mut [u8]) -> bool {
         trace!("stepping gameboy");
         self.cpu.step(&mut self.memory);
-        self.ppu.step(self.cpu.registers.cycles, &mut self.memory, pixel_buffer);
+        self.ppu.step(&mut self.memory, pixel_data)
     }
 }
