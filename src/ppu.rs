@@ -53,8 +53,7 @@ impl Sprite {
         let sprite_address = 0xFE00 + (id * 4);
         let y = memory.read_u8(sprite_address) as i32;
         let x = memory.read_u8(sprite_address + 1) as i32;
-        if x == 0 || y == 0
-        {
+        if x == 0 || y == 0 {
             return None;
         }
         let y = y - 16;
@@ -105,11 +104,12 @@ impl Ppu {
 
     fn fetch_tile(&self, address: u16, memory: &mut Memory) -> Tile {
         let tile_id = memory.read_u8(address) as u16;
-        if !self.lcd_control.background_tile_select && tile_id < 128 {
-            Tile::new(tile_id + 256, memory)
-        } else {
+        //something is wrong here lol
+        // if !self.lcd_control.background_tile_select && tile_id < 128 {
+        //     Tile::new(tile_id + 256, memory)
+        // } else {
             Tile::new(tile_id, memory)
-        }
+        // }
     }
 
     fn change_scanline(&mut self, scanline: u8, memory: &mut Memory) {
@@ -213,7 +213,12 @@ impl Ppu {
                     //dumb way not right just drawing the sprite
                     for x in 0..8u8 {
                         let pixel = sprite_tile.value_at(x, self.scanline - sprite.y as u8);
-                        Self::draw_pixel(pixel_data, (sprite.x + x as i32) as usize, self.scanline as usize, Self::palletize(pixel));
+                        Self::draw_pixel(
+                            pixel_data,
+                            (sprite.x + x as i32) as usize,
+                            self.scanline as usize,
+                            Self::palletize(pixel),
+                        );
                     }
                 }
             }

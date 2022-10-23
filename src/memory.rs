@@ -69,7 +69,7 @@ impl Memory {
     pub fn read_u8(&self, address: u16) -> u8 {
         match address {
             START_OF_FIXED_ROM..=END_OF_FIXED_ROM => {
-                if self.boot_enabled && address < END_OF_BOOT {
+                if self.boot_enabled && address <= END_OF_BOOT {
                     self.boot.read_u8(address)
                 } else {
                     self.cart_bank_0.read_u8(address)
