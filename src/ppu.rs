@@ -105,11 +105,11 @@ impl Ppu {
     fn fetch_tile(&self, address: u16, memory: &mut Memory) -> Tile {
         let tile_id = memory.read_u8(address) as u16;
         //something is wrong here lol
-        // if !self.lcd_control.background_tile_select && tile_id < 128 {
-        //     Tile::new(tile_id + 256, memory)
-        // } else {
+        if !self.lcd_control.background_tile_data_select && tile_id < 128 {
+            Tile::new(tile_id + 0x100, memory)
+        } else {
             Tile::new(tile_id, memory)
-        // }
+        }
     }
 
     fn change_scanline(&mut self, scanline: u8, memory: &mut Memory) {
@@ -315,7 +315,7 @@ impl LcdControl {
 
 impl Tile {
     fn new(tile_id: u16, memory: &mut Memory) -> Self {
-        let tile_address = TILESET_START_ADDRESS + (TILE_SIZE as u16 * tile_id as u16);
+        let tile_address = TILESET_START_ADDRESS + (TILE_SIZE as u16 * tile_id);
         let data = [0; TILE_SIZE];
         let data = data
             .into_iter()
@@ -328,8 +328,9 @@ impl Tile {
     fn value_at(&self, x: u8, y: u8) -> u8 {
         let mask_x = 1 << (7 - x);
         let y = y as usize * 2;
-        let low = if self.data[y] & mask_x != 0 { 1 } else { 0 };
-        let high = if self.data[y] & mask_x != 0 { 2 } else { 0 };
+        let low = (self.data[y] & mask_x != 0) as u8;
+        let high = ((self.data[y] & mask_x != 0) as u8) << 1;
         low | high
     }
 }
+
