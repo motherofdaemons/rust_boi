@@ -267,9 +267,6 @@ fn cp_imm8(registers: &mut Registers, memory: &mut Memory, _additional: &Instruc
     registers.inc_pc(1);
     let a = registers.read_r8(R8::A);
     let value = memory.read_u8(registers.get_pc());
-    if a == 144 {
-        println!("here");
-    }
     registers.inc_pc(1);
     let (res, carried) = a.overflowing_sub(value);
     registers.set_flags(

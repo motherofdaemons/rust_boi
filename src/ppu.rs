@@ -117,12 +117,13 @@ impl Ppu {
             let mut x = scx & 7;
             let y = (self.scanline + scy) & 7;
             for i in 0..GAMEBOY_SCREEN_WIDTH {
-                let value = tile.value_at(x, y);
-                if value != 0 {
+                let pixel = tile.value_at(x, y);
+                if pixel != 0 {
                     hits[i as usize] = true;
                 }
 
-                Self::draw_pixel(pixel_data, x as usize, y as usize, value);
+                //TODO need to convert the value using the pallete so it isn't a pure black screen
+                Self::draw_pixel(pixel_data, x as usize, y as usize, Self::palletize(pixel));
 
                 x += 1;
                 if x == 8 {
@@ -137,10 +138,15 @@ impl Ppu {
         if self.lcd_control.window_display && self.scanline >= self.wy {}
     }
 
-    fn draw_pixel(pixel_data: &mut [u8], x: usize, y: usize, value: u8) {
+    fn palletize(pixel: u8) -> u8{
+        let mut pallete = [255, 160, 96, 0];
+        pallete[(pixel & 0x3) as usize]
+    }
+
+    fn draw_pixel(pixel_data: &mut [u8], x: usize, y: usize, pixel: u8) {
         let offset = (GAMEBOY_SCREEN_WIDTH * 3) as usize * y;
         for i in 0..BYTES_PER_PIXEL as usize {
-            pixel_data[(x * 3) + offset + i] = value;
+            pixel_data[(x * 3) + offset + i] = pixel;
         }
     }
     pub fn step(&mut self, memory: &mut Memory, pixel_data: &mut [u8]) -> bool {
