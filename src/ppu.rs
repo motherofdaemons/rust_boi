@@ -40,7 +40,31 @@ struct Tile {
     data: Vec<u8>,
 }
 
-#[derive(Debug)]
+struct Sprite {
+    pub x: i32,
+    pub y: i32,
+    pub tile: u8,
+    //TODO implement flags
+}
+
+impl Sprite {
+    fn fetch(id: u16, memory: &mut Memory) -> Option<Self> {
+        //each sprite is 4 bytes wide as follow y, x, tile/pattern number, flags
+        let sprite_address = 0xFE00 + (id * 4);
+        let y = memory.read_u8(sprite_address) as i32;
+        let x = memory.read_u8(sprite_address + 1) as i32;
+        if x == 0 || y == 0
+        {
+            return None;
+        }
+        let y = y - 16;
+        let x = x - 8;
+        let tile = memory.read_u8(sprite_address + 2);
+        Some(Self { x, y, tile })
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
 enum PpuMode {
     OAM,
     VRAM,
@@ -76,11 +100,12 @@ impl Ppu {
 
     fn enter_mode(&mut self, mode: PpuMode, memory: &mut Memory) {
         self.current_mode = mode;
+        self.reset_window(mode, memory);
     }
 
-    fn fetch_tile(&self, address: u16, background_tile_select: bool, memory: &mut Memory) -> Tile {
+    fn fetch_tile(&self, address: u16, memory: &mut Memory) -> Tile {
         let tile_id = memory.read_u8(address) as u16;
-        if !background_tile_select && tile_id < 128 {
+        if !self.lcd_control.background_tile_select && tile_id < 128 {
             Tile::new(tile_id + 256, memory)
         } else {
             Tile::new(tile_id, memory)
@@ -110,9 +135,8 @@ impl Ppu {
                 0x9800
             } + map_line_offset;
             let mut line_offset = (scx >> 3) as u16;
-            let tile_id = map_offset + line_offset;
-            let mut tile =
-                self.fetch_tile(tile_id, self.lcd_control.background_tile_select, memory);
+            let mut tile_id_address = map_offset + line_offset;
+            let mut tile = self.fetch_tile(tile_id_address, memory);
 
             let mut x = scx & 7;
             let y = (self.scanline + scy) & 7;
@@ -123,23 +147,81 @@ impl Ppu {
                 }
 
                 //TODO need to convert the value using the pallete so it isn't a pure black screen
-                Self::draw_pixel(pixel_data, x as usize, y as usize, Self::palletize(pixel));
+                Self::draw_pixel(
+                    pixel_data,
+                    i as usize,
+                    self.scanline as usize,
+                    Self::palletize(pixel),
+                );
 
                 x += 1;
                 if x == 8 {
                     x = 0;
                     line_offset = (line_offset + 1) & 31;
-                    let tile_id = map_offset + line_offset;
-                    tile =
-                        self.fetch_tile(tile_id, self.lcd_control.background_tile_select, memory);
+                    tile_id_address = map_offset + line_offset;
+                    tile = self.fetch_tile(tile_id_address, memory);
                 }
             }
         }
-        if self.lcd_control.window_display && self.scanline >= self.wy {}
+        if self.lcd_control.window_display && self.scanline >= self.wy {
+            let map_line = self.scanline - self.wy;
+            let map_line_offset = ((map_line as u16) >> 3) << 5;
+
+            let map_offset = if self.lcd_control.window_tile_map_select {
+                0x9C00
+            } else {
+                0x9800
+            } + map_line_offset;
+
+            let mut line_offset = (self.wx >> 3) as u16;
+            let mut tile_id = map_offset + line_offset;
+            let mut tile = self.fetch_tile(tile_id, memory);
+
+            let mut x = 0;
+            let y = ((self.scanline - self.wy) & 7) as u16;
+
+            for i in 0..GAMEBOY_SCREEN_WIDTH {
+                let val = tile.value_at(x, y as u8);
+
+                if val != 0 {
+                    hits[i as usize] = true;
+                }
+
+                Self::draw_pixel(
+                    pixel_data,
+                    i as usize,
+                    self.scanline as usize,
+                    Self::palletize(val),
+                );
+
+                x += 1;
+
+                if x == 8 {
+                    x = 0;
+                    line_offset = (line_offset + 1) & 31;
+                    tile_id = map_offset + line_offset;
+                    tile = self.fetch_tile(tile_id, memory);
+                }
+            }
+        }
+
+        if self.lcd_control.draw_sprites {
+            // you can draw up to 40 sprites in a scanline
+            for id in 0..40 {
+                if let Some(sprite) = Sprite::fetch(id, memory) {
+                    let sprite_tile = Tile::new(sprite.tile as u16, memory);
+                    //dumb way not right just drawing the sprite
+                    for x in 0..8u8 {
+                        let pixel = sprite_tile.value_at(x, self.scanline - sprite.y as u8);
+                        Self::draw_pixel(pixel_data, (sprite.x + x as i32) as usize, self.scanline as usize, Self::palletize(pixel));
+                    }
+                }
+            }
+        }
     }
 
-    fn palletize(pixel: u8) -> u8{
-        let mut pallete = [255, 160, 96, 0];
+    fn palletize(pixel: u8) -> u8 {
+        let pallete = [255, 160, 96, 0];
         pallete[(pixel & 0x3) as usize]
     }
 
@@ -176,7 +258,7 @@ impl Ppu {
                 if self.dots_in_mode >= 208 {
                     self.dots_in_mode -= 208;
                     self.change_scanline(self.scanline + 1, memory);
-                    if self.scanline == 145 {
+                    if self.scanline == 144 {
                         self.enter_mode(PpuMode::VBLANK, memory);
                     } else {
                         self.enter_mode(PpuMode::OAM, memory);
@@ -191,11 +273,12 @@ impl Ppu {
                     self.dots_in_mode = 0;
                 }
 
-                if self.scanline == 154 {
+                if self.scanline == 153 {
                     self.change_scanline(0, memory);
                     self.enter_mode(PpuMode::OAM, memory);
+                    return true;
                 }
-                true
+                false
             }
         }
     }
