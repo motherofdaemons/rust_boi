@@ -38,8 +38,8 @@ macro_rules! instr {
     }};
 }
 
-fn check_for_half_carry(prev: u8, res: u8) -> bool {
-    (prev & 0xF) + (res & 0xF) > 0xF
+fn check_for_half_carry(a: u8, value: u8) -> bool {
+    (a & 0xF) + (value & 0xF) > 0xF
 }
 
 pub fn no_op(registers: &mut Registers, _memory: &mut Memory, _additional: &InstructionData) {
@@ -244,7 +244,7 @@ fn cp_r8(registers: &mut Registers, _memory: &mut Memory, additional: &Instructi
     registers.set_flags(
         Some(res == 0),
         Some(true),
-        Some(check_for_half_carry(value, res)),
+        Some(check_for_half_carry(a, value)),
         Some(carried),
     );
 }
@@ -258,7 +258,7 @@ fn cp_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &Ins
     registers.set_flags(
         Some(res == 0),
         Some(true),
-        Some(check_for_half_carry(value, res)),
+        Some(check_for_half_carry(a, value)),
         Some(carried),
     );
 }
@@ -272,7 +272,7 @@ fn cp_imm8(registers: &mut Registers, memory: &mut Memory, _additional: &Instruc
     registers.set_flags(
         Some(res == 0),
         Some(true),
-        Some(check_for_half_carry(value, res)),
+        Some(check_for_half_carry(a, value)),
         Some(carried),
     );
 }
@@ -286,7 +286,7 @@ fn add_r8(registers: &mut Registers, _memory: &mut Memory, additional: &Instruct
     registers.set_flags(
         Some(result == 0),
         Some(false),
-        Some(check_for_half_carry(a, result)),
+        Some(check_for_half_carry(a, value)),
         Some(carried),
     );
     registers.write_r8(R8::A, result);
@@ -301,7 +301,7 @@ fn add_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &In
     registers.set_flags(
         Some(result == 0),
         Some(false),
-        Some(check_for_half_carry(a, result)),
+        Some(check_for_half_carry(a, value)),
         Some(carried),
     );
     registers.write_r8(R8::A, result);
@@ -316,7 +316,7 @@ fn add_imm8(registers: &mut Registers, memory: &mut Memory, _additional: &Instru
     registers.set_flags(
         Some(result == 0),
         Some(false),
-        Some(check_for_half_carry(a, result)),
+        Some(check_for_half_carry(a, value)),
         Some(carried),
     );
     registers.write_r8(R8::A, result);
@@ -331,7 +331,7 @@ fn adc_r8(registers: &mut Registers, _memory: &mut Memory, additional: &Instruct
     registers.set_flags(
         Some(result == 0),
         Some(false),
-        Some(check_for_half_carry(a, result)),
+        Some(check_for_half_carry(a, value)),
         Some(carried),
     );
     registers.write_r8(R8::A, result);
@@ -363,7 +363,7 @@ fn adc_imm8(registers: &mut Registers, memory: &mut Memory, _additional: &Instru
     registers.set_flags(
         Some(result == 0),
         Some(false),
-        Some(check_for_half_carry(a, result)),
+        Some(check_for_half_carry(a, value)),
         Some(carried),
     );
     registers.write_r8(R8::A, result);
@@ -378,7 +378,7 @@ fn inc_r8(registers: &mut Registers, _memory: &mut Memory, additional: &Instruct
     registers.set_flags(
         Some(res == 0),
         Some(false),
-        Some(check_for_half_carry(value, res)),
+        Some(check_for_half_carry(value, 1)),
         None,
     );
 }
@@ -394,13 +394,13 @@ fn inc_r16(registers: &mut Registers, _memory: &mut Memory, additional: &Instruc
 fn inc_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let address = registers.read_r16(additional.r16_dst.unwrap());
-    let prev = memory.read_u8(address);
-    let value = prev.wrapping_add(1);
-    memory.write_u8(address, value);
+    let value = memory.read_u8(address);
+    let res = value.wrapping_add(1);
+    memory.write_u8(address, res);
     registers.set_flags(
-        Some(value == 0),
+        Some(res == 0),
         Some(false),
-        Some(check_for_half_carry(prev, value)),
+        Some(check_for_half_carry(value, 1)),
         None,
     );
 }
@@ -420,7 +420,7 @@ fn sub(registers: &mut Registers, memory: &mut Memory, additional: &InstructionD
     registers.set_flags(
         Some(res == 0),
         Some(true),
-        Some(check_for_half_carry(lhs, res)),
+        Some(check_for_half_carry(lhs, rhs)),
         Some(carried),
     );
 }
@@ -441,7 +441,7 @@ fn sub_carry(registers: &mut Registers, memory: &mut Memory, additional: &Instru
     registers.set_flags(
         Some(res == 0),
         Some(true),
-        Some(check_for_half_carry(lhs, res)),
+        Some(check_for_half_carry(lhs, rhs)),
         Some(carried),
     );
 }
@@ -451,12 +451,11 @@ fn dec_r8(registers: &mut Registers, _memory: &mut Memory, additional: &Instruct
     let register = additional.r8_dst.unwrap();
     let value = registers.read_r8(register);
     let res = value.wrapping_sub(1);
-    info!("fuck me: {}", res);
     registers.write_r8(register, res);
     registers.set_flags(
         Some(res == 0),
         Some(true),
-        Some(check_for_half_carry(value, res)),
+        Some(check_for_half_carry(value, 1)),
         None,
     );
 }
@@ -1015,8 +1014,8 @@ impl Instruction {
             0xBF => instr!(byte, "cp a",  1, cp_r8, InstructionData::new().r8_src(R8::A)),
             0xC0 => None,
             0xC1 => instr!(byte, "pop bc", 3, pop_r16, InstructionData::new().r16_dst(R16::BC)),
-            0xC2 => None,
-            0xC3 => instr!(byte, "jp nz", 4, jump_immediate, InstructionData::new().with_flags(ZERO_FLAG, 0)),
+            0xC2 => instr!(byte, "jp nz, a16", 4, jump_immediate, InstructionData::new().with_flags(ZERO_FLAG, 0)),
+            0xC3 => instr!(byte, "jp a16", 4, jump_immediate, InstructionData::new().with_flags(0, 0)),
             0xC4 => instr!(byte, "call nz, a16", 6, call, InstructionData::new().with_flags(ZERO_FLAG, 0)),
             0xC5 => instr!(byte, "push bc", 4, push_r16, InstructionData::new().r16_src(R16::BC)),
             0xC6 => instr!(byte, "add a, d8", 2, add_imm8, InstructionData::new()),
