@@ -19,7 +19,7 @@ const END_OF_ECHO_RAM: u16 = 0xFDFF;
 const START_OF_HIGH_RAM: u16 = 0xFE00;
 
 const ROM_BANK_SIZE: usize = 0x4000;
-const GAMEPAD_ADDRESS: u16 = 0xFF00;
+// const GAMEPAD_ADDRESS: u16 = 0xFF00;
 const BOOT_ROM_ADDRESS: u16 = 0xFF50;
 
 pub struct Memory {

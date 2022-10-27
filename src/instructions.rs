@@ -1,4 +1,4 @@
-use log::{info, trace};
+use log::trace;
 use std::fmt::Display;
 
 use crate::instruction_data::InstructionData;
@@ -141,6 +141,13 @@ fn ldd_indir_r16_r8(registers: &mut Registers, memory: &mut Memory, additional: 
     memory.write_u8(address, value);
     registers.write_r16(additional.r16_dst.unwrap(), address.wrapping_sub(1));
 }
+fn ld_indir_r16_imm8(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+    registers.inc_pc(1);
+    let value = memory.read_u8(registers.get_pc());
+    registers.inc_pc(1);
+    let address = registers.read_r16(additional.r16_dst.unwrap());
+    memory.write_u8(address, value);
+}
 fn ld_indir_imm16_sp(
     registers: &mut Registers,
     memory: &mut Memory,
@@ -169,11 +176,26 @@ fn ld_ff00_r8_imm8(registers: &mut Registers, memory: &mut Memory, additional: &
     registers.write_r8(additional.r8_dst.unwrap(), value);
 }
 
-fn ld_ff00_r8_r8(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+fn ld_ff00_indir_r8_r8(
+    registers: &mut Registers,
+    memory: &mut Memory,
+    additional: &InstructionData,
+) {
     registers.inc_pc(1);
     let value = registers.read_r8(additional.r8_src.unwrap());
     let address = 0xFF00 + registers.read_r8(additional.r8_dst.unwrap()) as u16;
     memory.write_u8(address, value);
+}
+
+fn ld_ff00_r8_indir_r8(
+    registers: &mut Registers,
+    memory: &mut Memory,
+    additional: &InstructionData,
+) {
+    registers.inc_pc(1);
+    let address = 0xFF00 + registers.read_r8(additional.r8_src.unwrap()) as u16;
+    let value = memory.read_u8(address);
+    registers.write_r8(additional.r8_dst.unwrap(), value);
 }
 
 fn ld_indir_imm16_r8(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
@@ -513,6 +535,11 @@ fn rla(registers: &mut Registers, _memory: &mut Memory, _additional: &Instructio
     let value = (value << 1) | registers.carry_flag() as u8;
     registers.write_r8(R8::A, value);
     registers.set_flags(Some(false), Some(false), Some(false), Some(new_carry));
+}
+
+fn di(registers: &mut Registers, _memory: &mut Memory, _additional: &InstructionData) {
+    registers.inc_pc(1);
+    registers.set_ime(false);
 }
 
 // Extended fucntion table functions
@@ -874,7 +901,7 @@ impl Instruction {
             0x33 => instr!(byte, "inc sp", 2, inc_r16, InstructionData::new().r16_dst(R16::SP)),
             0x34 => instr!(byte, "inc (hl)", 3, inc_indir_r16, InstructionData::new().r16_dst(R16::HL)),
             0x35 => None,
-            0x36 => None,
+            0x36 => instr!(byte, "ld (hl), d8", 3, ld_indir_r16_imm8, InstructionData::new().r16_dst(R16::HL)),
             0x37 => None,
             0x38 => instr!(byte, "jr s8", 3, jump_rel_imm8, InstructionData::new().with_flags(CARRY_FLAG, CARRY_FLAG)),
             0x39 => None,
@@ -1046,7 +1073,7 @@ impl Instruction {
             0xDF => instr!(byte, "rst 3", 4, rst_n, InstructionData::new().rst_code(0x18)),
             0xE0 => instr!(byte, "ld (a8) a", 3, ld_ff00_imm8_r8, InstructionData::new().r8_src(R8::A)),
             0xE1 => instr!(byte, "pop hl", 3, pop_r16, InstructionData::new().r16_dst(R16::HL)),
-            0xE2 => instr!(byte, "ld (c) a", 2, ld_ff00_r8_r8, InstructionData::new().r8_src(R8::A).r8_dst(R8::C)),
+            0xE2 => instr!(byte, "ld (c) a", 2, ld_ff00_indir_r8_r8, InstructionData::new().r8_src(R8::A).r8_dst(R8::C)),
             0xE3 => None,
             0xE4 => None,
             0xE5 => instr!(byte, "push hl", 4, push_r16, InstructionData::new().r16_src(R16::HL)),
@@ -1062,8 +1089,8 @@ impl Instruction {
             0xEF => instr!(byte, "rst 5", 4, rst_n, InstructionData::new().rst_code(0x28)),
             0xF0 => instr!(byte, "ld a, (a8)", 3, ld_ff00_r8_imm8, InstructionData::new().r8_dst(R8::A)),
             0xF1 => instr!(byte, "pop af", 3, pop_r16, InstructionData::new().r16_dst(R16::AF)),
-            0xF2 => None,
-            0xF3 => None,
+            0xF2 => instr!(byte, "ld a, (c)", 2, ld_ff00_r8_indir_r8, InstructionData::new().r8_src(R8::C).r8_dst(R8::A)),
+            0xF3 => instr!(byte, "di", 1, di, InstructionData::new()),
             0xF4 => None,
             0xF5 => instr!(byte, "push af", 4, push_r16, InstructionData::new().r16_src(R16::AF)),
             0xF6 => None,

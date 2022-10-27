@@ -8,6 +8,7 @@ pub struct Registers {
     af: RegisterPair,
     de: RegisterPair,
     hl: RegisterPair,
+    ime: bool,
 }
 
 #[derive(Copy, Clone, Default, Debug)]
@@ -47,15 +48,19 @@ impl Registers {
     pub fn get_pc(&self) -> u16 {
         self.read_r16(R16::PC)
     }
+
     pub fn inc_pc(&mut self, by: u16) {
         self.write_r16(R16::PC, self.get_pc().wrapping_add(by));
     }
+
     pub fn set_pc(&mut self, pc: u16) {
         self.write_r16(R16::PC, pc)
     }
+
     pub fn get_flags(&self) -> u8 {
         self.read_r8(R8::F)
     }
+
     pub fn set_flags(
         &mut self,
         zero: Option<bool>,
@@ -78,12 +83,14 @@ impl Registers {
         }
         self.write_r8(R8::F, flags);
     }
+
     pub fn set_bit_flag(flags: u8, bit: u8, set: bool) -> u8 {
         match set {
             true => flags | bit,
             false => flags & !bit,
         }
     }
+
     // pub fn zero_flag(&self) -> bool {
     //     self.get_flags() & ZERO_FLAG == ZERO_FLAG
     // }
@@ -97,6 +104,9 @@ impl Registers {
         self.get_flags() & CARRY_FLAG == CARRY_FLAG
     }
 
+    pub fn set_ime(&mut self, value: bool) {
+        self.ime = value;
+    }
     pub fn read_r8(&self, register: R8) -> u8 {
         match register {
             R8::B => self.bc.high,
