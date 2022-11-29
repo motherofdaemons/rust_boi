@@ -205,6 +205,14 @@ fn ld_indir_imm16_r8(registers: &mut Registers, memory: &mut Memory, additional:
     registers.inc_pc(2);
     memory.write_u8(address, value);
 }
+
+fn ld_r8_indir_r16_inc(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+    registers.inc_pc(1);
+    let address = registers.read_r16(additional.r16_src.unwrap());
+    let value = memory.read_u8(address);
+    registers.write_r8(additional.r8_dst.unwrap(), value);
+    registers.write_r16(additional.r16_src.unwrap(), address + 1);
+}
 //Bit logic funcitons
 fn and(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
@@ -889,7 +897,7 @@ impl Instruction {
             0x27 => None,
             0x28 => instr!(byte, "jr z, s8", 3, jump_rel_imm8, InstructionData::new().with_flags(ZERO_FLAG, ZERO_FLAG)),
             0x29 => None,
-            0x2A => None,
+            0x2A => instr!(byte, "ld a, (hl+)", 2, ld_r8_indir_r16_inc, InstructionData::new().r16_src(R16::HL).r8_dst(R8::A)),
             0x2B => instr!(byte, "dec hl", 2, dec_r16, InstructionData::new().r16_dst(R16::HL)),
             0x2C => instr!(byte, "inc l", 1, inc_r8, InstructionData::new().r8_dst(R8::L)),
             0x2D => instr!(byte, "dec l", 1, dec_r8, InstructionData::new().r8_dst(R8::L)),
