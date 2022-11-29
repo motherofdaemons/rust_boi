@@ -213,6 +213,7 @@ fn ld_r8_indir_r16_inc(registers: &mut Registers, memory: &mut Memory, additiona
     registers.write_r8(additional.r8_dst.unwrap(), value);
     registers.write_r16(additional.r16_src.unwrap(), address + 1);
 }
+
 //Bit logic funcitons
 fn and(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
@@ -249,6 +250,8 @@ fn xor_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &In
     registers.set_flags(Some(res == 0), Some(false), Some(false), Some(false));
 }
 
+
+//TODO break this out into two different functions one for r8 and one for r16
 fn or(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     if let Some(register) = additional.r8_src {
