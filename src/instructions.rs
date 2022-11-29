@@ -550,6 +550,11 @@ fn di(registers: &mut Registers, _memory: &mut Memory, _additional: &Instruction
     registers.set_ime(false);
 }
 
+fn ei(registers: &mut Registers, _memory: &mut Memory, _additional: &InstructionData) {
+    registers.inc_pc(1);
+    registers.set_ime(true);
+}
+
 // Extended fucntion table functions
 fn ext_rl_r8(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(2);
@@ -1106,7 +1111,7 @@ impl Instruction {
             0xF8 => None,
             0xF9 => None,
             0xFA => None,
-            0xFB => None,
+            0xFB => instr!(byte, "ei", 1, ei, InstructionData::new()),
             0xFC => None,
             0xFD => None,
             0xFE => instr!(byte, "cp d8", 1, cp_imm8, InstructionData::new()),
