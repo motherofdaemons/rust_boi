@@ -1264,7 +1264,7 @@ impl Instruction {
             0xCF => instr!(byte, "rst 1", 4, rst_n, InstructionData::new().rst_code(0x08)),
             0xD0 => instr!(byte, "ret nc", 5, ret_conditional, InstructionData::new().with_flags(CARRY_FLAG, 0)),
             0xD1 => instr!(byte, "pop de", 3, pop_r16, InstructionData::new().r16_dst(R16::DE)),
-            0xD2 => None,
+            0xD2 => instr!(byte, "jp nc, a16", 4, jump_imm16, InstructionData::new().with_flags(CARRY_FLAG, 0)),
             0xD3 => None, // Not an instruction
             0xD4 => instr!(byte, "call nc, a16", 6, call, InstructionData::new().with_flags(CARRY_FLAG, 0)),
             0xD5 => instr!(byte, "push de", 4, push_r16, InstructionData::new().r16_src(R16::DE)),
