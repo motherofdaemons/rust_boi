@@ -1000,7 +1000,7 @@ impl Instruction {
             0x33 => instr!(byte, "swap e", 2, ext_swap_r8, InstructionData::new().r8_dst(R8::E)),
             0x34 => instr!(byte, "swap h", 2, ext_swap_r8, InstructionData::new().r8_dst(R8::H)),
             0x35 => instr!(byte, "swap l", 2, ext_swap_r8, InstructionData::new().r8_dst(R8::L)),
-            0x36 => instr!(byte, "swap (hl)", 2, ext_swap_indir_r16, InstructionData::new().r16_dst(R16::HL)),
+            0x36 => instr!(byte, "swap (hl)", 4, ext_swap_indir_r16, InstructionData::new().r16_dst(R16::HL)),
             0x37 => instr!(byte, "swap a", 2, ext_swap_r8, InstructionData::new().r8_dst(R8::A)),
             0x38 => None,
             0x39 => None,
