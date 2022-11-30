@@ -789,6 +789,26 @@ fn ext_rlc_indir_r16(registers: &mut Registers, memory: &mut Memory, additional:
     registers.set_flags(Some(value == 0), Some(false), Some(false), Some(new_carry));
 }
 
+fn ext_rrc_r8(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
+    registers.inc_pc(2);
+    let register = additional.r8_dst.unwrap();
+    let value = registers.read_r8(register);
+    let new_carry = (value & 0b1) == 0b1;
+    let value = (value >> 1) | ((new_carry as u8) << 7);
+    registers.write_r8(register, value);
+    registers.set_flags(Some(value == 0), Some(false), Some(false), Some(new_carry));
+}
+
+fn ext_rrc_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+    registers.inc_pc(2);
+    let address = registers.read_r16(additional.r16_dst.unwrap());
+    let value = memory.read_u8(address);
+    let new_carry = (value & 0b1) == 0b1;
+    let value = (value >> 1) | ((new_carry as u8) << 7);
+    memory.write_u8(address, value);
+    registers.set_flags(Some(value == 0), Some(false), Some(false), Some(new_carry));
+}
+
 fn ext_rl_r8(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(2);
     let register = additional.r8_dst.unwrap();
@@ -851,14 +871,14 @@ impl Instruction {
             0x05 => instr!(byte, "rlc l", 2, ext_rlc_r8, InstructionData::new().r8_dst(R8::L)),
             0x06 => instr!(byte, "rlc (hl)", 4, ext_rlc_indir_r16, InstructionData::new().r16_dst(R16::HL)),
             0x07 => instr!(byte, "rlc a", 2, ext_rlc_r8, InstructionData::new().r8_dst(R8::A)),
-            0x08 => None,
-            0x09 => None,
-            0x0A => None,
-            0x0B => None,
-            0x0C => None,
-            0x0D => None,
-            0x0E => None,
-            0x0F => None,
+            0x08 => instr!(byte, "rrc b", 2, ext_rrc_r8, InstructionData::new().r8_dst(R8::B)),
+            0x09 => instr!(byte, "rrc c", 2, ext_rrc_r8, InstructionData::new().r8_dst(R8::C)),
+            0x0A => instr!(byte, "rrc d", 2, ext_rrc_r8, InstructionData::new().r8_dst(R8::D)),
+            0x0B => instr!(byte, "rrc e", 2, ext_rrc_r8, InstructionData::new().r8_dst(R8::E)),
+            0x0C => instr!(byte, "rrc h", 2, ext_rrc_r8, InstructionData::new().r8_dst(R8::H)),
+            0x0D => instr!(byte, "rrc l", 2, ext_rrc_r8, InstructionData::new().r8_dst(R8::L)),
+            0x0E => instr!(byte, "rrc (hl)", 4, ext_rrc_indir_r16, InstructionData::new().r16_dst(R16::HL)),
+            0x0F => instr!(byte, "rrc a", 2, ext_rrc_r8, InstructionData::new().r8_dst(R8::A)),
             0x10 => instr!(byte, "rl b", 2, ext_rl_r8, InstructionData::new().r8_dst(R8::B)),
             0x11 => instr!(byte, "rl c", 2, ext_rl_r8, InstructionData::new().r8_dst(R8::C)),
             0x12 => instr!(byte, "rl d", 2, ext_rl_r8, InstructionData::new().r8_dst(R8::D)),
