@@ -911,6 +911,28 @@ fn ext_srl_indir_r16(registers: &mut Registers, memory: &mut Memory, additional:
     registers.set_flags(Some(value == 0), Some(false), Some(false), Some(new_carry));
 }
 
+fn ext_swap_r8(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
+    registers.inc_pc(2);
+    let register = additional.r8_dst.unwrap();
+    let old = registers.read_r8(register);
+    let lower = old & 0b00001111;
+    let upper = (old & 0b11110000) >> 4;
+    let value = (lower << 4) & upper;
+    registers.write_r8(register, value);
+    registers.set_flags(Some(value == 0), Some(false), Some(false), Some(false));
+}
+
+fn ext_swap_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+    registers.inc_pc(2);
+    let address = registers.read_r16(additional.r16_dst.unwrap());
+    let old = memory.read_u8(address);
+    let lower = old & 0b00001111;
+    let upper = (old & 0b11110000) >> 4;
+    let value = (lower << 4) & upper;
+    memory.write_u8(address, value);
+    registers.set_flags(Some(value == 0), Some(false), Some(false), Some(false));
+}
+
 fn ext_bit_r8(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(2);
     let value = registers.read_r8(additional.r8_src.unwrap());
@@ -932,26 +954,38 @@ fn ext_bit_indir_r16(registers: &mut Registers, memory: &mut Memory, additional:
     );
 }
 
-fn ext_swap_r8(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
+fn ext_res_bit_r8(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(2);
-    let register = additional.r8_dst.unwrap();
-    let old = registers.read_r8(register);
-    let lower = old & 0b00001111;
-    let upper = (old & 0b11110000) >> 4;
-    let value = (lower << 4) & upper;
-    registers.write_r8(register, value);
-    registers.set_flags(Some(value == 0), Some(false), Some(false), Some(false));
+    let value = registers.read_r8(additional.r8_src.unwrap());
+    let bit_mask = !(1 << additional.bit.unwrap());
+    let result = value & bit_mask;
+    registers.write_r8(additional.r8_src.unwrap(), result);
 }
 
-fn ext_swap_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+fn ext_res_bit_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(2);
-    let address = registers.read_r16(additional.r16_dst.unwrap());
-    let old = memory.read_u8(address);
-    let lower = old & 0b00001111;
-    let upper = (old & 0b11110000) >> 4;
-    let value = (lower << 4) & upper;
-    memory.write_u8(address, value);
-    registers.set_flags(Some(value == 0), Some(false), Some(false), Some(false));
+    let address = registers.read_r16(additional.r16_src.unwrap());
+    let value = memory.read_u8(address);
+    let bit_mask = !(1 << additional.bit.unwrap());
+    let result = value & bit_mask;
+    memory.write_u8(address, result);
+}
+
+fn ext_set_bit_r8(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
+    registers.inc_pc(2);
+    let value = registers.read_r8(additional.r8_src.unwrap());
+    let bit_mask = 1 << additional.bit.unwrap();
+    let result = value | bit_mask;
+    registers.write_r8(additional.r8_src.unwrap(), result);
+}
+
+fn ext_set_bit_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+    registers.inc_pc(2);
+    let address = registers.read_r16(additional.r16_src.unwrap());
+    let value = memory.read_u8(address);
+    let bit_mask = 1 << additional.bit.unwrap();
+    let result = value | bit_mask;
+    memory.write_u8(address, result);
 }
 
 impl Instruction {
@@ -1036,7 +1070,7 @@ impl Instruction {
             0x43 => instr!(byte, "bit 0, e", 2, ext_bit_r8, InstructionData::new().r8_src(R8::E).bit(0)),
             0x44 => instr!(byte, "bit 0, h", 2, ext_bit_r8, InstructionData::new().r8_src(R8::H).bit(0)),
             0x45 => instr!(byte, "bit 0, l", 2, ext_bit_r8, InstructionData::new().r8_src(R8::L).bit(0)),
-            0x46 => instr!(byte, "bit 0, (hl)", 2, ext_bit_indir_r16, InstructionData::new().r16_src(R16::HL).bit(0)),
+            0x46 => instr!(byte, "bit 0, (hl)", 3, ext_bit_indir_r16, InstructionData::new().r16_src(R16::HL).bit(0)),
             0x47 => instr!(byte, "bit 0, a", 2, ext_bit_r8, InstructionData::new().r8_src(R8::A).bit(0)),
             0x48 => instr!(byte, "bit 1, b", 2, ext_bit_r8, InstructionData::new().r8_src(R8::B).bit(1)),
             0x49 => instr!(byte, "bit 1, c", 2, ext_bit_r8, InstructionData::new().r8_src(R8::C).bit(1)),
@@ -1044,7 +1078,7 @@ impl Instruction {
             0x4B => instr!(byte, "bit 1, e", 2, ext_bit_r8, InstructionData::new().r8_src(R8::E).bit(1)),
             0x4C => instr!(byte, "bit 1, h", 2, ext_bit_r8, InstructionData::new().r8_src(R8::H).bit(1)),
             0x4D => instr!(byte, "bit 1, l", 2, ext_bit_r8, InstructionData::new().r8_src(R8::L).bit(1)),
-            0x4E => instr!(byte, "bit 1, (hl)", 2, ext_bit_indir_r16, InstructionData::new().r16_src(R16::HL).bit(1)),
+            0x4E => instr!(byte, "bit 1, (hl)", 3, ext_bit_indir_r16, InstructionData::new().r16_src(R16::HL).bit(1)),
             0x4F => instr!(byte, "bit 1, a", 2, ext_bit_r8, InstructionData::new().r8_src(R8::A).bit(1)),
             0x50 => instr!(byte, "bit 2, b", 2, ext_bit_r8, InstructionData::new().r8_src(R8::B).bit(2)),
             0x51 => instr!(byte, "bit 2, c", 2, ext_bit_r8, InstructionData::new().r8_src(R8::C).bit(2)),
@@ -1052,7 +1086,7 @@ impl Instruction {
             0x53 => instr!(byte, "bit 2, e", 2, ext_bit_r8, InstructionData::new().r8_src(R8::E).bit(2)),
             0x54 => instr!(byte, "bit 2, h", 2, ext_bit_r8, InstructionData::new().r8_src(R8::H).bit(2)),
             0x55 => instr!(byte, "bit 2, l", 2, ext_bit_r8, InstructionData::new().r8_src(R8::L).bit(2)),
-            0x56 => instr!(byte, "bit 2, (hl)", 2, ext_bit_indir_r16, InstructionData::new().r16_src(R16::HL).bit(2)),
+            0x56 => instr!(byte, "bit 2, (hl)", 3, ext_bit_indir_r16, InstructionData::new().r16_src(R16::HL).bit(2)),
             0x57 => instr!(byte, "bit 2, a", 2, ext_bit_r8, InstructionData::new().r8_src(R8::A).bit(2)),
             0x58 => instr!(byte, "bit 3, b", 2, ext_bit_r8, InstructionData::new().r8_src(R8::B).bit(3)),
             0x59 => instr!(byte, "bit 3, c", 2, ext_bit_r8, InstructionData::new().r8_src(R8::C).bit(3)),
@@ -1060,7 +1094,7 @@ impl Instruction {
             0x5B => instr!(byte, "bit 3, e", 2, ext_bit_r8, InstructionData::new().r8_src(R8::E).bit(3)),
             0x5C => instr!(byte, "bit 3, h", 2, ext_bit_r8, InstructionData::new().r8_src(R8::H).bit(3)),
             0x5D => instr!(byte, "bit 3, l", 2, ext_bit_r8, InstructionData::new().r8_src(R8::L).bit(3)),
-            0x5E => instr!(byte, "bit 3, (hl)", 2, ext_bit_indir_r16, InstructionData::new().r16_src(R16::HL).bit(3)),
+            0x5E => instr!(byte, "bit 3, (hl)", 3, ext_bit_indir_r16, InstructionData::new().r16_src(R16::HL).bit(3)),
             0x5F => instr!(byte, "bit 3, a", 2, ext_bit_r8, InstructionData::new().r8_src(R8::A).bit(3)),
             0x60 => instr!(byte, "bit 4, b", 2, ext_bit_r8, InstructionData::new().r8_src(R8::B).bit(4)),
             0x61 => instr!(byte, "bit 4, c", 2, ext_bit_r8, InstructionData::new().r8_src(R8::C).bit(4)),
@@ -1068,7 +1102,7 @@ impl Instruction {
             0x63 => instr!(byte, "bit 4, e", 2, ext_bit_r8, InstructionData::new().r8_src(R8::E).bit(4)),
             0x64 => instr!(byte, "bit 4, h", 2, ext_bit_r8, InstructionData::new().r8_src(R8::H).bit(4)),
             0x65 => instr!(byte, "bit 4, l", 2, ext_bit_r8, InstructionData::new().r8_src(R8::L).bit(4)),
-            0x66 => instr!(byte, "bit 4, (hl)", 2, ext_bit_indir_r16, InstructionData::new().r16_src(R16::HL).bit(4)),
+            0x66 => instr!(byte, "bit 4, (hl)", 3, ext_bit_indir_r16, InstructionData::new().r16_src(R16::HL).bit(4)),
             0x67 => instr!(byte, "bit 4, a", 2, ext_bit_r8, InstructionData::new().r8_src(R8::A).bit(4)),
             0x68 => instr!(byte, "bit 5, b", 2, ext_bit_r8, InstructionData::new().r8_src(R8::B).bit(5)),
             0x69 => instr!(byte, "bit 5, c", 2, ext_bit_r8, InstructionData::new().r8_src(R8::C).bit(5)),
@@ -1076,7 +1110,7 @@ impl Instruction {
             0x6B => instr!(byte, "bit 5, e", 2, ext_bit_r8, InstructionData::new().r8_src(R8::E).bit(5)),
             0x6C => instr!(byte, "bit 5, h", 2, ext_bit_r8, InstructionData::new().r8_src(R8::H).bit(5)),
             0x6D => instr!(byte, "bit 5, l", 2, ext_bit_r8, InstructionData::new().r8_src(R8::L).bit(5)),
-            0x6E => instr!(byte, "bit 5, (hl)", 2, ext_bit_indir_r16, InstructionData::new().r16_src(R16::HL).bit(5)),
+            0x6E => instr!(byte, "bit 5, (hl)", 3, ext_bit_indir_r16, InstructionData::new().r16_src(R16::HL).bit(5)),
             0x6F => instr!(byte, "bit 5, a", 2, ext_bit_r8, InstructionData::new().r8_src(R8::A).bit(5)),
             0x70 => instr!(byte, "bit 6, b", 2, ext_bit_r8, InstructionData::new().r8_src(R8::B).bit(6)),
             0x71 => instr!(byte, "bit 6, c", 2, ext_bit_r8, InstructionData::new().r8_src(R8::C).bit(6)),
@@ -1084,7 +1118,7 @@ impl Instruction {
             0x73 => instr!(byte, "bit 6, e", 2, ext_bit_r8, InstructionData::new().r8_src(R8::E).bit(6)),
             0x74 => instr!(byte, "bit 6, h", 2, ext_bit_r8, InstructionData::new().r8_src(R8::H).bit(6)),
             0x75 => instr!(byte, "bit 6, l", 2, ext_bit_r8, InstructionData::new().r8_src(R8::L).bit(6)),
-            0x76 => instr!(byte, "bit 6, (hl)", 2, ext_bit_indir_r16, InstructionData::new().r16_src(R16::HL).bit(6)),
+            0x76 => instr!(byte, "bit 6, (hl)", 3, ext_bit_indir_r16, InstructionData::new().r16_src(R16::HL).bit(6)),
             0x77 => instr!(byte, "bit 6, a", 2, ext_bit_r8, InstructionData::new().r8_src(R8::A).bit(6)),
             0x78 => instr!(byte, "bit 7, b", 2, ext_bit_r8, InstructionData::new().r8_src(R8::B).bit(7)),
             0x79 => instr!(byte, "bit 7, c", 2, ext_bit_r8, InstructionData::new().r8_src(R8::C).bit(7)),
@@ -1092,136 +1126,136 @@ impl Instruction {
             0x7B => instr!(byte, "bit 7, e", 2, ext_bit_r8, InstructionData::new().r8_src(R8::E).bit(7)),
             0x7C => instr!(byte, "bit 7, h", 2, ext_bit_r8, InstructionData::new().r8_src(R8::H).bit(7)),
             0x7D => instr!(byte, "bit 7, l", 2, ext_bit_r8, InstructionData::new().r8_src(R8::L).bit(7)),
-            0x7E => instr!(byte, "bit 7, (hl)", 2, ext_bit_indir_r16, InstructionData::new().r16_src(R16::HL).bit(7)),
+            0x7E => instr!(byte, "bit 7, (hl)", 3, ext_bit_indir_r16, InstructionData::new().r16_src(R16::HL).bit(7)),
             0x7F => instr!(byte, "bit 7, a", 2, ext_bit_r8, InstructionData::new().r8_src(R8::A).bit(7)),
-            0x80 => None,
-            0x81 => None,
-            0x82 => None,
-            0x83 => None,
-            0x84 => None,
-            0x85 => None,
-            0x86 => None,
-            0x87 => None,
-            0x88 => None,
-            0x89 => None,
-            0x8A => None,
-            0x8B => None,
-            0x8C => None,
-            0x8D => None,
-            0x8E => None,
-            0x8F => None,
-            0x90 => None,
-            0x91 => None,
-            0x92 => None,
-            0x93 => None,
-            0x94 => None,
-            0x95 => None,
-            0x96 => None,
-            0x97 => None,
-            0x98 => None,
-            0x99 => None,
-            0x9A => None,
-            0x9B => None,
-            0x9C => None,
-            0x9D => None,
-            0x9E => None,
-            0x9F => None,
-            0xA0 => None,
-            0xA1 => None,
-            0xA2 => None,
-            0xA3 => None,
-            0xA4 => None,
-            0xA5 => None,
-            0xA6 => None,
-            0xA7 => None,
-            0xA8 => None,
-            0xA9 => None,
-            0xAA => None,
-            0xAB => None,
-            0xAC => None,
-            0xAD => None,
-            0xAE => None,
-            0xAF => None,
-            0xB0 => None,
-            0xB1 => None,
-            0xB2 => None,
-            0xB3 => None,
-            0xB4 => None,
-            0xB5 => None,
-            0xB6 => None,
-            0xB7 => None,
-            0xB8 => None,
-            0xB9 => None,
-            0xBA => None,
-            0xBB => None,
-            0xBC => None,
-            0xBD => None,
-            0xBE => None,
-            0xBF => None,
-            0xC0 => None,
-            0xC1 => None,
-            0xC2 => None,
-            0xC3 => None,
-            0xC4 => None,
-            0xC5 => None,
-            0xC6 => None,
-            0xC7 => None,
-            0xC8 => None,
-            0xC9 => None,
-            0xCA => None,
-            0xCB => None,
-            0xCC => None,
-            0xCD => None,
-            0xCE => None,
-            0xCF => None,
-            0xD0 => None,
-            0xD1 => None,
-            0xD2 => None,
-            0xD3 => None,
-            0xD4 => None,
-            0xD5 => None,
-            0xD6 => None,
-            0xD7 => None,
-            0xD8 => None,
-            0xD9 => None,
-            0xDA => None,
-            0xDB => None,
-            0xDC => None,
-            0xDD => None,
-            0xDE => None,
-            0xDF => None,
-            0xE0 => None,
-            0xE1 => None,
-            0xE2 => None,
-            0xE3 => None,
-            0xE4 => None,
-            0xE5 => None,
-            0xE6 => None,
-            0xE7 => None,
-            0xE8 => None,
-            0xE9 => None,
-            0xEA => None,
-            0xEB => None,
-            0xEC => None,
-            0xED => None,
-            0xEE => None,
-            0xEF => None,
-            0xF0 => None,
-            0xF1 => None,
-            0xF2 => None,
-            0xF3 => None,
-            0xF4 => None,
-            0xF5 => None,
-            0xF6 => None,
-            0xF7 => None,
-            0xF8 => None,
-            0xF9 => None,
-            0xFA => None,
-            0xFB => None,
-            0xFC => None,
-            0xFD => None,
-            0xFE => None,
-            0xFF => None,
+            0x80 => instr!(byte, "res 0, b", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::B).bit(0)),
+            0x81 => instr!(byte, "res 0, c", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::C).bit(0)),
+            0x82 => instr!(byte, "res 0, d", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::D).bit(0)),
+            0x83 => instr!(byte, "res 0, e", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::E).bit(0)),
+            0x84 => instr!(byte, "res 0, h", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::H).bit(0)),
+            0x85 => instr!(byte, "res 0, l", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::L).bit(0)),
+            0x86 => instr!(byte, "res 0, (hl)", 4, ext_res_bit_indir_r16, InstructionData::new().r16_src(R16::HL).bit(0)),
+            0x87 => instr!(byte, "res 0, a", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::A).bit(0)),
+            0x88 => instr!(byte, "res 1, b", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::B).bit(1)),
+            0x89 => instr!(byte, "res 1, c", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::C).bit(1)),
+            0x8A => instr!(byte, "res 1, d", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::D).bit(1)),
+            0x8B => instr!(byte, "res 1, e", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::E).bit(1)),
+            0x8C => instr!(byte, "res 1, h", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::H).bit(1)),
+            0x8D => instr!(byte, "res 1, l", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::L).bit(1)),
+            0x8E => instr!(byte, "res 1, (hl)", 4, ext_res_bit_indir_r16, InstructionData::new().r16_src(R16::HL).bit(1)),
+            0x8F => instr!(byte, "res 1, a", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::A).bit(1)),
+            0x90 => instr!(byte, "res 2, b", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::B).bit(2)),
+            0x91 => instr!(byte, "res 2, c", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::C).bit(2)),
+            0x92 => instr!(byte, "res 2, d", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::D).bit(2)),
+            0x93 => instr!(byte, "res 2, e", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::E).bit(2)),
+            0x94 => instr!(byte, "res 2, h", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::H).bit(2)),
+            0x95 => instr!(byte, "res 2, l", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::L).bit(2)),
+            0x96 => instr!(byte, "res 2, (hl)", 4, ext_res_bit_indir_r16, InstructionData::new().r16_src(R16::HL).bit(2)),
+            0x97 => instr!(byte, "res 2, a", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::A).bit(2)),
+            0x98 => instr!(byte, "res 3, b", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::B).bit(3)),
+            0x99 => instr!(byte, "res 3, c", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::C).bit(3)),
+            0x9A => instr!(byte, "res 3, d", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::D).bit(3)),
+            0x9B => instr!(byte, "res 3, e", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::E).bit(3)),
+            0x9C => instr!(byte, "res 3, h", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::H).bit(3)),
+            0x9D => instr!(byte, "res 3, l", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::L).bit(3)),
+            0x9E => instr!(byte, "res 3, (hl)", 4, ext_res_bit_indir_r16, InstructionData::new().r16_src(R16::HL).bit(3)),
+            0x9F => instr!(byte, "res 3, a", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::A).bit(3)),
+            0xA0 => instr!(byte, "res 4, b", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::B).bit(4)),
+            0xA1 => instr!(byte, "res 4, c", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::C).bit(4)),
+            0xA2 => instr!(byte, "res 4, d", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::D).bit(4)),
+            0xA3 => instr!(byte, "res 4, e", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::E).bit(4)),
+            0xA4 => instr!(byte, "res 4, h", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::H).bit(4)),
+            0xA5 => instr!(byte, "res 4, l", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::L).bit(4)),
+            0xA6 => instr!(byte, "res 4, (hl)", 4, ext_res_bit_indir_r16, InstructionData::new().r16_src(R16::HL).bit(4)),
+            0xA7 => instr!(byte, "res 4, a", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::A).bit(4)),
+            0xA8 => instr!(byte, "res 5, b", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::B).bit(5)),
+            0xA9 => instr!(byte, "res 5, c", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::C).bit(5)),
+            0xAA => instr!(byte, "res 5, d", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::D).bit(5)),
+            0xAB => instr!(byte, "res 5, e", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::E).bit(5)),
+            0xAC => instr!(byte, "res 5, h", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::H).bit(5)),
+            0xAD => instr!(byte, "res 5, l", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::L).bit(5)),
+            0xAE => instr!(byte, "res 5, (hl)", 4, ext_res_bit_indir_r16, InstructionData::new().r16_src(R16::HL).bit(5)),
+            0xAF => instr!(byte, "res 5, a", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::A).bit(5)),
+            0xB0 => instr!(byte, "res 6, b", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::B).bit(6)),
+            0xB1 => instr!(byte, "res 6, c", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::C).bit(6)),
+            0xB2 => instr!(byte, "res 6, d", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::D).bit(6)),
+            0xB3 => instr!(byte, "res 6, e", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::E).bit(6)),
+            0xB4 => instr!(byte, "res 6, h", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::H).bit(6)),
+            0xB5 => instr!(byte, "res 6, l", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::L).bit(6)),
+            0xB6 => instr!(byte, "res 6, (hl)", 4, ext_res_bit_indir_r16, InstructionData::new().r16_src(R16::HL).bit(6)),
+            0xB7 => instr!(byte, "res 6, a", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::A).bit(6)),
+            0xB8 => instr!(byte, "res 7, b", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::B).bit(7)),
+            0xB9 => instr!(byte, "res 7, c", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::C).bit(7)),
+            0xBA => instr!(byte, "res 7, d", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::D).bit(7)),
+            0xBB => instr!(byte, "res 7, e", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::E).bit(7)),
+            0xBC => instr!(byte, "res 7, h", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::H).bit(7)),
+            0xBD => instr!(byte, "res 7, l", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::L).bit(7)),
+            0xBE => instr!(byte, "res 7, (hl)", 4, ext_res_bit_indir_r16, InstructionData::new().r16_src(R16::HL).bit(7)),
+            0xBF => instr!(byte, "res 7, a", 2, ext_res_bit_r8, InstructionData::new().r8_src(R8::A).bit(7)),
+            0xC0 => instr!(byte, "set 0, b", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::B).bit(0)),
+            0xC1 => instr!(byte, "set 0, c", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::C).bit(0)),
+            0xC2 => instr!(byte, "set 0, d", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::D).bit(0)),
+            0xC3 => instr!(byte, "set 0, e", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::E).bit(0)),
+            0xC4 => instr!(byte, "set 0, h", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::H).bit(0)),
+            0xC5 => instr!(byte, "set 0, l", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::L).bit(0)),
+            0xC6 => instr!(byte, "set 0, (hl)", 4, ext_set_bit_indir_r16, InstructionData::new().r16_src(R16::HL).bit(0)),
+            0xC7 => instr!(byte, "set 0, a", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::A).bit(0)),
+            0xC8 => instr!(byte, "set 1, b", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::B).bit(1)),
+            0xC9 => instr!(byte, "set 1, c", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::C).bit(1)),
+            0xCA => instr!(byte, "set 1, d", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::D).bit(1)),
+            0xCB => instr!(byte, "set 1, e", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::E).bit(1)),
+            0xCC => instr!(byte, "set 1, h", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::H).bit(1)),
+            0xCD => instr!(byte, "set 1, l", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::L).bit(1)),
+            0xCE => instr!(byte, "set 1, (hl)", 4, ext_set_bit_indir_r16, InstructionData::new().r16_src(R16::HL).bit(1)),
+            0xCF => instr!(byte, "set 1, a", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::A).bit(1)),
+            0xD0 => instr!(byte, "set 2, b", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::B).bit(2)),
+            0xD1 => instr!(byte, "set 2, c", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::C).bit(2)),
+            0xD2 => instr!(byte, "set 2, d", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::D).bit(2)),
+            0xD3 => instr!(byte, "set 2, e", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::E).bit(2)),
+            0xD4 => instr!(byte, "set 2, h", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::H).bit(2)),
+            0xD5 => instr!(byte, "set 2, l", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::L).bit(2)),
+            0xD6 => instr!(byte, "set 2, (hl)", 4, ext_set_bit_indir_r16, InstructionData::new().r16_src(R16::HL).bit(2)),
+            0xD7 => instr!(byte, "set 2, a", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::A).bit(2)),
+            0xD8 => instr!(byte, "set 3, b", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::B).bit(3)),
+            0xD9 => instr!(byte, "set 3, c", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::C).bit(3)),
+            0xDA => instr!(byte, "set 3, d", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::D).bit(3)),
+            0xDB => instr!(byte, "set 3, e", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::E).bit(3)),
+            0xDC => instr!(byte, "set 3, h", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::H).bit(3)),
+            0xDD => instr!(byte, "set 3, l", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::L).bit(3)),
+            0xDE => instr!(byte, "set 3, (hl)", 4, ext_set_bit_indir_r16, InstructionData::new().r16_src(R16::HL).bit(3)),
+            0xDF => instr!(byte, "set 3, a", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::A).bit(3)),
+            0xE0 => instr!(byte, "set 4, b", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::B).bit(4)),
+            0xE1 => instr!(byte, "set 4, c", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::C).bit(4)),
+            0xE2 => instr!(byte, "set 4, d", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::D).bit(4)),
+            0xE3 => instr!(byte, "set 4, e", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::E).bit(4)),
+            0xE4 => instr!(byte, "set 4, h", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::H).bit(4)),
+            0xE5 => instr!(byte, "set 4, l", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::L).bit(4)),
+            0xE6 => instr!(byte, "set 4, (hl)", 4, ext_set_bit_indir_r16, InstructionData::new().r16_src(R16::HL).bit(4)),
+            0xE7 => instr!(byte, "set 4, a", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::A).bit(4)),
+            0xE8 => instr!(byte, "set 5, b", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::B).bit(5)),
+            0xE9 => instr!(byte, "set 5, c", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::C).bit(5)),
+            0xEA => instr!(byte, "set 5, d", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::D).bit(5)),
+            0xEB => instr!(byte, "set 5, e", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::E).bit(5)),
+            0xEC => instr!(byte, "set 5, h", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::H).bit(5)),
+            0xED => instr!(byte, "set 5, l", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::L).bit(5)),
+            0xEE => instr!(byte, "set 5, (hl)", 4, ext_set_bit_indir_r16, InstructionData::new().r16_src(R16::HL).bit(5)),
+            0xEF => instr!(byte, "set 5, a", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::A).bit(5)),
+            0xF0 => instr!(byte, "set 6, b", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::B).bit(6)),
+            0xF1 => instr!(byte, "set 6, c", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::C).bit(6)),
+            0xF2 => instr!(byte, "set 6, d", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::D).bit(6)),
+            0xF3 => instr!(byte, "set 6, e", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::E).bit(6)),
+            0xF4 => instr!(byte, "set 6, h", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::H).bit(6)),
+            0xF5 => instr!(byte, "set 6, l", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::L).bit(6)),
+            0xF6 => instr!(byte, "set 6, (hl)", 4, ext_set_bit_indir_r16, InstructionData::new().r16_src(R16::HL).bit(6)),
+            0xF7 => instr!(byte, "set 6, a", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::A).bit(6)),
+            0xF8 => instr!(byte, "set 7, b", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::B).bit(7)),
+            0xF9 => instr!(byte, "set 7, c", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::C).bit(7)),
+            0xFA => instr!(byte, "set 7, d", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::D).bit(7)),
+            0xFB => instr!(byte, "set 7, e", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::E).bit(7)),
+            0xFC => instr!(byte, "set 7, h", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::H).bit(7)),
+            0xFD => instr!(byte, "set 7, l", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::L).bit(7)),
+            0xFE => instr!(byte, "set 7, (hl)", 4, ext_set_bit_indir_r16, InstructionData::new().r16_src(R16::HL).bit(7)),
+            0xFF => instr!(byte, "set 7, a", 2, ext_set_bit_r8, InstructionData::new().r8_src(R8::A).bit(7)),
         }
     }
     #[rustfmt::skip]
