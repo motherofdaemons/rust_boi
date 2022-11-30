@@ -125,7 +125,7 @@ fn ld_r8_imm8(registers: &mut Registers, memory: &mut Memory, additional: &Instr
     registers.write_r8(additional.r8_dst.unwrap(), value);
 }
 
-fn ld_r16_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+fn ld_r16_r16(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let value = registers.read_r16(additional.r16_src.unwrap());
     registers.write_r16(additional.r16_dst.unwrap(), value)
@@ -259,7 +259,7 @@ fn ldd_r8_indir_r16(
 }
 
 //Bit logic funcitons
-fn and_r8(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+fn and_r8(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let result = registers.read_r8(R8::A) & registers.read_r8(additional.r8_src.unwrap());
     registers.write_r8(R8::A, result);
@@ -275,7 +275,7 @@ fn and_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &In
     registers.set_flags(Some(result == 0), Some(false), Some(true), Some(false));
 }
 
-fn and_imm8(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+fn and_imm8(registers: &mut Registers, memory: &mut Memory, _additional: &InstructionData) {
     registers.inc_pc(1);
     let result = registers.read_r8(R8::A) & memory.read_u8(registers.get_pc());
     registers.write_r8(R8::A, result);
@@ -325,7 +325,7 @@ fn or_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &Ins
     registers.set_flags(Some(result == 0), Some(false), Some(false), Some(false));
 }
 
-fn or_imm8(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+fn or_imm8(registers: &mut Registers, memory: &mut Memory, _additional: &InstructionData) {
     registers.inc_pc(1);
     let value = memory.read_u8(registers.get_pc());
     registers.inc_pc(1);
@@ -405,7 +405,7 @@ fn add_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &In
     registers.write_r8(R8::A, result);
 }
 
-fn add_r16_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+fn add_r16_r16(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let src = additional.r16_src.unwrap();
     let dst = additional.r16_dst.unwrap();
@@ -519,7 +519,7 @@ fn inc_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &In
     );
 }
 
-fn sub_r8(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+fn sub_r8(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let lhs = registers.read_r8(R8::A);
     let rhs = registers.read_r8(additional.r8_src.unwrap());
@@ -563,7 +563,7 @@ fn sub_imm8(registers: &mut Registers, memory: &mut Memory, _additional: &Instru
     );
 }
 
-fn sbc_r8(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+fn sbc_r8(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let lhs = registers.read_r8(R8::A);
     let rhs = registers.read_r8(additional.r8_src.unwrap());
@@ -695,6 +695,13 @@ fn call(registers: &mut Registers, memory: &mut Memory, additional: &Instruction
     }
 }
 
+//Special functions
+
+//Meant to save battery but I don't think we have to do anything since we aren't on battery
+fn stop(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+    registers.inc_pc(2);
+}
+
 //Bit manipulation functions
 fn rlca(registers: &mut Registers, _memory: &mut Memory, _additional: &InstructionData) {
     registers.inc_pc(1);
@@ -761,6 +768,17 @@ fn ccf(registers: &mut Registers, _memory: &mut Memory, _additional: &Instructio
 }
 
 // Extended fucntion table functions
+
+fn ext_rlc_r8(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
+    registers.inc_pc(2);
+    let register = additional.r8_dst.unwrap();
+    let value = registers.read_r8(register);
+    let new_carry = (value & 0x80) >> 7 == 0b1;
+    let value = (value << 1) | new_carry as u8;
+    registers.write_r8(register, value);
+    registers.set_flags(Some(value == 0), Some(false), Some(false), Some(new_carry));
+}
+
 fn ext_rl_r8(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(2);
     let register = additional.r8_dst.unwrap();
@@ -770,6 +788,7 @@ fn ext_rl_r8(registers: &mut Registers, _memory: &mut Memory, additional: &Instr
     registers.write_r8(register, value);
     registers.set_flags(Some(value == 0), Some(false), Some(false), Some(new_carry));
 }
+
 fn ext_bit_r8(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(2);
     let value = registers.read_r8(additional.r8_src.unwrap());
@@ -791,7 +810,7 @@ fn ext_bit_indir_r16(registers: &mut Registers, memory: &mut Memory, additional:
     );
 }
 
-fn ext_swap_r8(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+fn ext_swap_r8(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(2);
     let register = additional.r8_dst.unwrap();
     let old = registers.read_r8(register);
@@ -814,14 +833,14 @@ impl Instruction {
     #[rustfmt::skip]
     fn from_byte_prefixed(byte: u8) -> Option<Instruction> {
         match byte {
-            0x00 => None,
-            0x01 => None,
-            0x02 => None,
-            0x03 => None,
-            0x04 => None,
-            0x05 => None,
+            0x00 => instr!(byte, "rlc b", 2, ext_rlc_r8, InstructionData::new().r8_dst(R8::B)),
+            0x01 => instr!(byte, "rlc c", 2, ext_rlc_r8, InstructionData::new().r8_dst(R8::C)),
+            0x02 => instr!(byte, "rlc d", 2, ext_rlc_r8, InstructionData::new().r8_dst(R8::D)),
+            0x03 => instr!(byte, "rlc e", 2, ext_rlc_r8, InstructionData::new().r8_dst(R8::E)),
+            0x04 => instr!(byte, "rlc h", 2, ext_rlc_r8, InstructionData::new().r8_dst(R8::H)),
+            0x05 => instr!(byte, "rlc l", 2, ext_rlc_r8, InstructionData::new().r8_dst(R8::L)),
             0x06 => None,
-            0x07 => None,
+            0x07 => instr!(byte, "rlc a", 2, ext_rlc_r8, InstructionData::new().r8_dst(R8::A)),
             0x08 => None,
             0x09 => None,
             0x0A => None,
@@ -1092,7 +1111,7 @@ impl Instruction {
             0x0D => instr!(byte, "dec c", 1, dec_r8, InstructionData::new().r8_dst(R8::C)),
             0x0E => instr!(byte, "ld c, d8", 2, ld_r8_imm8, InstructionData::new().r8_dst(R8::C)),
             0x0F => instr!(byte, "rrca", 1, rrca, InstructionData::new()),
-            0x10 => None,
+            0x10 => instr!(byte, "stop", 1, stop, InstructionData::new()),
             0x11 => instr!(byte, "ld de, d16", 3, ld_r16_imm16, InstructionData::new().r16_dst(R16::DE)),
             0x12 => instr!(byte, "ld (de), a", 2, ld_indir_r16_r8, InstructionData::new().r16_dst(R16::DE).r8_src(R8::A)),
             0x13 => instr!(byte, "inc de", 2, inc_r16, InstructionData::new().r16_dst(R16::DE)),
