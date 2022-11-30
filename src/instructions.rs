@@ -38,8 +38,12 @@ macro_rules! instr {
     }};
 }
 
-fn check_for_half_carry(a: u8, value: u8) -> bool {
-    (a & 0xF) + (value & 0xF) > 0xF
+fn check_for_half_carry_8bit(lhs: u8, rhs: u8) -> bool {
+    (lhs & 0xF) + (rhs & 0xF) > 0xF
+}
+
+fn check_for_half_carry_16bit(lhs: u16, rhs: u16) -> bool {
+    (lhs & 0xFF) + (rhs & 0xFF) > 0xFF
 }
 
 pub fn no_op(registers: &mut Registers, _memory: &mut Memory, _additional: &InstructionData) {
@@ -286,7 +290,7 @@ fn cp_r8(registers: &mut Registers, _memory: &mut Memory, additional: &Instructi
     registers.set_flags(
         Some(result == 0),
         Some(true),
-        Some(check_for_half_carry(a, value)),
+        Some(check_for_half_carry_8bit(a, value)),
         Some(carried),
     );
 }
@@ -300,7 +304,7 @@ fn cp_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &Ins
     registers.set_flags(
         Some(result == 0),
         Some(true),
-        Some(check_for_half_carry(a, value)),
+        Some(check_for_half_carry_8bit(a, value)),
         Some(carried),
     );
 }
@@ -314,7 +318,7 @@ fn cp_imm8(registers: &mut Registers, memory: &mut Memory, _additional: &Instruc
     registers.set_flags(
         Some(result == 0),
         Some(true),
-        Some(check_for_half_carry(a, value)),
+        Some(check_for_half_carry_8bit(a, value)),
         Some(carried),
     );
 }
@@ -328,7 +332,7 @@ fn add_r8(registers: &mut Registers, _memory: &mut Memory, additional: &Instruct
     registers.set_flags(
         Some(result == 0),
         Some(false),
-        Some(check_for_half_carry(a, value)),
+        Some(check_for_half_carry_8bit(a, value)),
         Some(carried),
     );
     registers.write_r8(R8::A, result);
@@ -343,10 +347,21 @@ fn add_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &In
     registers.set_flags(
         Some(result == 0),
         Some(false),
-        Some(check_for_half_carry(a, value)),
+        Some(check_for_half_carry_8bit(a, value)),
         Some(carried),
     );
     registers.write_r8(R8::A, result);
+}
+
+fn add_r16_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+    registers.inc_pc(1);
+    let src = additional.r16_src.unwrap();
+    let dst = additional.r16_dst.unwrap();
+    let lhs = registers.read_r16(src);
+    let rhs = registers.read_r16(dst);
+    let (result, carry) = lhs.overflowing_add(rhs);
+    registers.write_r16(src, result);
+    registers.set_flags(None, Some(false), Some(check_for_half_carry_16bit(lhs, rhs)), Some(carry));
 }
 
 fn add_imm8(registers: &mut Registers, memory: &mut Memory, _additional: &InstructionData) {
@@ -358,7 +373,7 @@ fn add_imm8(registers: &mut Registers, memory: &mut Memory, _additional: &Instru
     registers.set_flags(
         Some(result == 0),
         Some(false),
-        Some(check_for_half_carry(a, value)),
+        Some(check_for_half_carry_8bit(a, value)),
         Some(carried),
     );
     registers.write_r8(R8::A, result);
@@ -373,7 +388,7 @@ fn adc_r8(registers: &mut Registers, _memory: &mut Memory, additional: &Instruct
     registers.set_flags(
         Some(result == 0),
         Some(false),
-        Some(check_for_half_carry(a, value)),
+        Some(check_for_half_carry_8bit(a, value)),
         Some(carried),
     );
     registers.write_r8(R8::A, result);
@@ -389,7 +404,7 @@ fn adc_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &In
     registers.set_flags(
         Some(result == 0),
         Some(false),
-        Some(check_for_half_carry(a, result)),
+        Some(check_for_half_carry_8bit(a, result)),
         Some(carried),
     );
     registers.write_r8(R8::A, result);
@@ -405,7 +420,7 @@ fn adc_imm8(registers: &mut Registers, memory: &mut Memory, _additional: &Instru
     registers.set_flags(
         Some(result == 0),
         Some(false),
-        Some(check_for_half_carry(a, value)),
+        Some(check_for_half_carry_8bit(a, value)),
         Some(carried),
     );
     registers.write_r8(R8::A, result);
@@ -420,7 +435,7 @@ fn inc_r8(registers: &mut Registers, _memory: &mut Memory, additional: &Instruct
     registers.set_flags(
         Some(result == 0),
         Some(false),
-        Some(check_for_half_carry(value, 1)),
+        Some(check_for_half_carry_8bit(value, 1)),
         None,
     );
 }
@@ -442,7 +457,7 @@ fn inc_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &In
     registers.set_flags(
         Some(result == 0),
         Some(false),
-        Some(check_for_half_carry(value, 1)),
+        Some(check_for_half_carry_8bit(value, 1)),
         None,
     );
 }
@@ -462,7 +477,7 @@ fn sub(registers: &mut Registers, memory: &mut Memory, additional: &InstructionD
     registers.set_flags(
         Some(result == 0),
         Some(true),
-        Some(check_for_half_carry(lhs, rhs)),
+        Some(check_for_half_carry_8bit(lhs, rhs)),
         Some(carried),
     );
 }
@@ -483,7 +498,7 @@ fn sub_carry(registers: &mut Registers, memory: &mut Memory, additional: &Instru
     registers.set_flags(
         Some(result == 0),
         Some(true),
-        Some(check_for_half_carry(lhs, rhs)),
+        Some(check_for_half_carry_8bit(lhs, rhs)),
         Some(carried),
     );
 }
@@ -497,7 +512,7 @@ fn dec_r8(registers: &mut Registers, _memory: &mut Memory, additional: &Instruct
     registers.set_flags(
         Some(result == 0),
         Some(true),
-        Some(check_for_half_carry(value, 1)),
+        Some(check_for_half_carry_8bit(value, 1)),
         None,
     );
 }
@@ -927,7 +942,7 @@ impl Instruction {
             0x06 => instr!(byte, "ld b, d8", 2, ld_r8_imm8, InstructionData::new().r8_dst(R8::B)),
             0x07 => instr!(byte, "rlca", 1, rlca, InstructionData::new()),
             0x08 => instr!(byte, "ld (a16), sp", 5, ld_indir_imm16_sp, InstructionData::new()),
-            0x09 => None,
+            0x09 => instr!(byte, "add hl, bc", 2, add_r16_r16, InstructionData::new().r16_src(R16::BC).r16_dst(R16::HL)),
             0x0A => instr!(byte, "ld a, (bc)", 2, ld_r8_indir_r16, InstructionData::new().r8_dst(R8::A).r16_src(R16::BC)),
             0x0B => instr!(byte, "dec bc", 2, dec_r16, InstructionData::new().r16_dst(R16::BC)),
             0x0C => instr!(byte, "inc c", 1, inc_r8, InstructionData::new().r8_dst(R8::C)),
@@ -943,7 +958,7 @@ impl Instruction {
             0x16 => instr!(byte, "ld d, d8", 2, ld_r8_imm8, InstructionData::new().r8_dst(R8::D)),
             0x17 => instr!(byte, "rla", 1, rla, InstructionData::new()),
             0x18 => instr!(byte, "jr s8", 3, jump_rel_imm8, InstructionData::new().with_flags(0, 0)),
-            0x19 => None,
+            0x19 => instr!(byte, "add hl, de", 2, add_r16_r16, InstructionData::new().r16_src(R16::DE).r16_dst(R16::HL)),
             0x1A => instr!(byte, "ld a, (de)", 2, ld_r8_indir_r16, InstructionData::new().r8_dst(R8::A).r16_src(R16::DE)),
             0x1B => instr!(byte, "dec de", 2, dec_r16, InstructionData::new().r16_dst(R16::DE)),
             0x1C => instr!(byte, "inc e", 1, inc_r8, InstructionData::new().r8_dst(R8::E)),
@@ -959,7 +974,7 @@ impl Instruction {
             0x26 => instr!(byte, "ld h, d8", 2, ld_r8_imm8, InstructionData::new().r8_dst(R8::H)),
             0x27 => None,
             0x28 => instr!(byte, "jr z, s8", 3, jump_rel_imm8, InstructionData::new().with_flags(ZERO_FLAG, ZERO_FLAG)),
-            0x29 => None,
+            0x29 => instr!(byte, "add hl, hl", 2, add_r16_r16, InstructionData::new().r16_src(R16::HL).r16_dst(R16::HL)),
             0x2A => instr!(byte, "ld a, (hl+)", 2, ld_r8_indir_r16_inc, InstructionData::new().r16_src(R16::HL).r8_dst(R8::A)),
             0x2B => instr!(byte, "dec hl", 2, dec_r16, InstructionData::new().r16_dst(R16::HL)),
             0x2C => instr!(byte, "inc l", 1, inc_r8, InstructionData::new().r8_dst(R8::L)),
@@ -975,7 +990,7 @@ impl Instruction {
             0x36 => instr!(byte, "ld (hl), d8", 3, ld_indir_r16_imm8, InstructionData::new().r16_dst(R16::HL)),
             0x37 => None,
             0x38 => instr!(byte, "jr s8", 3, jump_rel_imm8, InstructionData::new().with_flags(CARRY_FLAG, CARRY_FLAG)),
-            0x39 => None,
+            0x39 => instr!(byte, "add hl, sp", 2, add_r16_r16, InstructionData::new().r16_src(R16::SP).r16_dst(R16::HL)),
             0x3A => None,
             0x3B => instr!(byte, "dec sp", 2, dec_r16, InstructionData::new().r16_dst(R16::SP)),
             0x3C => instr!(byte, "inc a", 1, inc_r8, InstructionData::new().r8_dst(R8::A)),
