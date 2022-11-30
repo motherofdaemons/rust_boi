@@ -698,7 +698,7 @@ fn call(registers: &mut Registers, memory: &mut Memory, additional: &Instruction
 //Special functions
 
 //Meant to save battery but I don't think we have to do anything since we aren't on battery
-fn stop(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+fn stop(registers: &mut Registers, _memory: &mut Memory, _additional: &InstructionData) {
     registers.inc_pc(2);
 }
 
