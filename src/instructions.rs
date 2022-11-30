@@ -56,11 +56,7 @@ pub fn jump_r16(registers: &mut Registers, _memory: &mut Memory, additional: &In
     registers.set_pc(target_address);
 }
 
-pub fn jump_imm16(
-    registers: &mut Registers,
-    memory: &mut Memory,
-    additional: &InstructionData,
-) {
+pub fn jump_imm16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     //should we jump mask out the flag we are checking for and see if it is a go
     if (registers.get_flags() & additional.flag_mask.unwrap()) == additional.flag_expected.unwrap()
@@ -215,6 +211,13 @@ fn ld_indir_imm16_r8(registers: &mut Registers, memory: &mut Memory, additional:
     registers.inc_pc(2);
     memory.write_u8(address, value);
 }
+fn ld_r8_indir_imm16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+    registers.inc_pc(1);
+    let address = memory.read_u16(registers.get_pc());
+    registers.inc_pc(2);
+    let value = memory.read_u8(address);
+    registers.write_r8(additional.r8_dst.unwrap(), value);
+}
 
 fn ld_r8_indir_r16_inc(
     registers: &mut Registers,
@@ -265,6 +268,15 @@ fn xor_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &In
     let register = additional.r16_src.unwrap();
     let address = registers.read_r16(register);
     let value = memory.read_u8(address);
+    let result = registers.read_r8(R8::A) ^ value;
+    registers.write_r8(R8::A, result);
+    registers.set_flags(Some(result == 0), Some(false), Some(false), Some(false));
+}
+
+fn xor_imm8(registers: &mut Registers, memory: &mut Memory, _additional: &InstructionData) {
+    registers.inc_pc(1);
+    let value = memory.read_u8(registers.get_pc());
+    registers.inc_pc(1);
     let result = registers.read_r8(R8::A) ^ value;
     registers.write_r8(R8::A, result);
     registers.set_flags(Some(result == 0), Some(false), Some(false), Some(false));
@@ -367,7 +379,12 @@ fn add_r16_r16(registers: &mut Registers, memory: &mut Memory, additional: &Inst
     let rhs = registers.read_r16(dst);
     let (result, carry) = lhs.overflowing_add(rhs);
     registers.write_r16(src, result);
-    registers.set_flags(None, Some(false), Some(check_for_half_carry_16bit(lhs, rhs)), Some(carry));
+    registers.set_flags(
+        None,
+        Some(false),
+        Some(check_for_half_carry_16bit(lhs, rhs)),
+        Some(carry),
+    );
 }
 
 fn add_imm8(registers: &mut Registers, memory: &mut Memory, _additional: &InstructionData) {
@@ -535,6 +552,17 @@ fn ret(registers: &mut Registers, memory: &mut Memory, _additional: &Instruction
     registers.inc_pc(1);
     let new_pc = registers.stack_pop16(memory);
     registers.set_pc(new_pc);
+}
+
+fn ret_conditional(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+    registers.inc_pc(1);
+    if (registers.get_flags() & additional.flag_mask.unwrap()) == additional.flag_expected.unwrap()
+    {
+        let new_pc = registers.stack_pop16(memory);
+        registers.set_pc(new_pc);
+    } else {
+        memory.cpu_cycles = 2;
+    }
 }
 
 fn rst_n(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
@@ -1065,7 +1093,7 @@ impl Instruction {
             0x7B => instr!(byte, "ld a e", 1, ld_r8_r8, InstructionData::new().r8_dst(R8::A).r8_src(R8::E)),
             0x7C => instr!(byte, "ld a h", 1, ld_r8_r8, InstructionData::new().r8_dst(R8::A).r8_src(R8::H)),
             0x7D => instr!(byte, "ld a l", 1, ld_r8_r8, InstructionData::new().r8_dst(R8::A).r8_src(R8::L)),
-            0x7E => instr!(byte, "ld a (hl)", 2, ld_r8_indir_r16, InstructionData::new().r8_dst(R8::A).r16_dst(R16::HL)),
+            0x7E => instr!(byte, "ld a (hl)", 2, ld_r8_indir_r16, InstructionData::new().r8_dst(R8::A).r16_src(R16::HL)),
             0x7F => instr!(byte, "ld a a", 1, ld_r8_r8, InstructionData::new().r8_dst(R8::A).r8_src(R8::A)),
             0x80 => instr!(byte, "add a, b", 1, add_r8, InstructionData::new().r8_src(R8::B)),
             0x81 => instr!(byte, "add a, c", 1, add_r8, InstructionData::new().r8_src(R8::C)),
@@ -1131,7 +1159,7 @@ impl Instruction {
             0xBD => instr!(byte, "cp l",  1, cp_r8, InstructionData::new().r8_src(R8::L)),
             0xBE => instr!(byte, "cp hl", 2, cp_indir_r16, InstructionData::new().r16_src(R16::HL)),
             0xBF => instr!(byte, "cp a",  1, cp_r8, InstructionData::new().r8_src(R8::A)),
-            0xC0 => None,
+            0xC0 => instr!(byte, "ret nz", 5, ret_conditional, InstructionData::new().with_flags(ZERO_FLAG, 0)),
             0xC1 => instr!(byte, "pop bc", 3, pop_r16, InstructionData::new().r16_dst(R16::BC)),
             0xC2 => instr!(byte, "jp nz, a16", 4, jump_imm16, InstructionData::new().with_flags(ZERO_FLAG, 0)),
             0xC3 => instr!(byte, "jp a16", 4, jump_imm16, InstructionData::new().with_flags(0, 0)),
@@ -1139,7 +1167,7 @@ impl Instruction {
             0xC5 => instr!(byte, "push bc", 4, push_r16, InstructionData::new().r16_src(R16::BC)),
             0xC6 => instr!(byte, "add a, d8", 2, add_imm8, InstructionData::new()),
             0xC7 => instr!(byte, "rst 0", 4, rst_n, InstructionData::new().rst_code(0x00)),
-            0xC8 => None,
+            0xC8 => instr!(byte, "ret z", 5, ret_conditional, InstructionData::new().with_flags(ZERO_FLAG, ZERO_FLAG)),
             0xC9 => instr!(byte, "ret", 4, ret, InstructionData::new()),
             0xCA => instr!(byte, "jp z, a16", 4, jump_imm16, InstructionData::new().with_flags(ZERO_FLAG, ZERO_FLAG)),
             0xCB => None,
@@ -1147,7 +1175,7 @@ impl Instruction {
             0xCD => instr!(byte, "call a16", 6, call, InstructionData::new().with_flags(0, 0)),
             0xCE => instr!(byte, "adc a, d8", 2, adc_imm8, InstructionData::new()),
             0xCF => instr!(byte, "rst 1", 4, rst_n, InstructionData::new().rst_code(0x08)),
-            0xD0 => None,
+            0xD0 => instr!(byte, "ret nc", 5, ret_conditional, InstructionData::new().with_flags(CARRY_FLAG, 0)),
             0xD1 => instr!(byte, "pop de", 3, pop_r16, InstructionData::new().r16_dst(R16::DE)),
             0xD2 => None,
             0xD3 => None,
@@ -1155,7 +1183,7 @@ impl Instruction {
             0xD5 => instr!(byte, "push de", 4, push_r16, InstructionData::new().r16_src(R16::DE)),
             0xD6 => None,
             0xD7 => instr!(byte, "rst 2", 4, rst_n, InstructionData::new().rst_code(0x10)),
-            0xD8 => None,
+            0xD8 => instr!(byte, "ret c", 5, ret_conditional, InstructionData::new().with_flags(CARRY_FLAG, CARRY_FLAG)),
             0xD9 => None,
             0xDA => instr!(byte, "jp c, a16", 4, jump_imm16, InstructionData::new().with_flags(CARRY_FLAG, CARRY_FLAG)),
             0xDB => None,
@@ -1177,7 +1205,7 @@ impl Instruction {
             0xEB => None,
             0xEC => None,
             0xED => None,
-            0xEE => None,
+            0xEE => instr!(byte, "xor d8", 2, xor_imm8, InstructionData::new()),
             0xEF => instr!(byte, "rst 5", 4, rst_n, InstructionData::new().rst_code(0x28)),
             0xF0 => instr!(byte, "ld a, (a8)", 3, ld_ff00_r8_imm8, InstructionData::new().r8_dst(R8::A)),
             0xF1 => instr!(byte, "pop af", 3, pop_r16, InstructionData::new().r16_dst(R16::AF)),
@@ -1189,7 +1217,7 @@ impl Instruction {
             0xF7 => instr!(byte, "rst 6", 4, rst_n, InstructionData::new().rst_code(0x30)),
             0xF8 => None,
             0xF9 => None,
-            0xFA => None,
+            0xFA => instr!(byte, "ld a, (a16)", 4, ld_r8_indir_imm16, InstructionData::new().r8_dst(R8::A)),
             0xFB => instr!(byte, "ei", 1, ei, InstructionData::new()),
             0xFC => None,
             0xFD => None,
