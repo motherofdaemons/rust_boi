@@ -598,6 +598,20 @@ fn dec_r16(registers: &mut Registers, _memory: &mut Memory, additional: &Instruc
     registers.write_r16(register, result);
 }
 
+fn dec_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+    registers.inc_pc(1);
+    let address = registers.read_r16(additional.r16_dst.unwrap());
+    let value = memory.read_u8(address);
+    let result = value.wrapping_sub(1);
+    memory.write_u8(address, result);
+    registers.set_flags(
+        Some(result == 0),
+        Some(true),
+        Some(check_for_half_carry_8bit(value, 1)),
+        None,
+    );
+}
+
 fn ret(registers: &mut Registers, memory: &mut Memory, _additional: &InstructionData) {
     registers.inc_pc(1);
     let new_pc = registers.stack_pop16(memory);
@@ -1070,7 +1084,7 @@ impl Instruction {
             0x32 => instr!(byte, "ld (hl-), a", 2, ldd_indir_r16_r8, InstructionData::new().r8_src(R8::A).r16_dst(R16::HL)),
             0x33 => instr!(byte, "inc sp", 2, inc_r16, InstructionData::new().r16_dst(R16::SP)),
             0x34 => instr!(byte, "inc (hl)", 3, inc_indir_r16, InstructionData::new().r16_dst(R16::HL)),
-            0x35 => None,
+            0x35 => instr!(byte, "dec (hl)", 3, dec_indir_r16, InstructionData::new().r16_dst(R16::HL)),
             0x36 => instr!(byte, "ld (hl), d8", 3, ld_indir_r16_imm8, InstructionData::new().r16_dst(R16::HL)),
             0x37 => None,
             0x38 => instr!(byte, "jr s8", 3, jump_rel_imm8, InstructionData::new().with_flags(CARRY_FLAG, CARRY_FLAG)),
