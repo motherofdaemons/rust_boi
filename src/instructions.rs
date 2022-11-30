@@ -488,8 +488,7 @@ fn inc_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &In
 fn sub_r8(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let lhs = registers.read_r8(R8::A);
-    let mut rhs = 0;
-    rhs = registers.read_r8(additional.r8_src.unwrap());
+    let rhs = registers.read_r8(additional.r8_src.unwrap());
     let (result, carried) = lhs.overflowing_sub(rhs);
     registers.write_r8(R8::A, result);
     registers.set_flags(
@@ -503,9 +502,23 @@ fn sub_r8(registers: &mut Registers, memory: &mut Memory, additional: &Instructi
 fn sub_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let lhs = registers.read_r8(R8::A);
-    let mut rhs = 0;
     let address = registers.read_r16(additional.r16_src.unwrap());
-    rhs = memory.read_u8(address);
+    let rhs = memory.read_u8(address);
+    let (result, carried) = lhs.overflowing_sub(rhs);
+    registers.write_r8(R8::A, result);
+    registers.set_flags(
+        Some(result == 0),
+        Some(true),
+        Some(check_for_half_carry_8bit(lhs, rhs)),
+        Some(carried),
+    );
+}
+
+fn sub_imm8(registers: &mut Registers, memory: &mut Memory, _additional: &InstructionData) {
+    registers.inc_pc(1);
+    let lhs = registers.read_r8(R8::A);
+    let address = registers.get_pc();
+    let rhs = memory.read_u8(address);
     let (result, carried) = lhs.overflowing_sub(rhs);
     registers.write_r8(R8::A, result);
     registers.set_flags(
@@ -519,8 +532,7 @@ fn sub_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &In
 fn sbc_r8(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let lhs = registers.read_r8(R8::A);
-    let mut rhs = 0;
-    rhs = registers.read_r8(additional.r8_src.unwrap());
+    let rhs = registers.read_r8(additional.r8_src.unwrap());
     let carry = registers.carry_flag() as u8;
     let (result, carried) = lhs.overflowing_sub(rhs - carry);
     registers.write_r8(R8::A, result);
@@ -535,9 +547,24 @@ fn sbc_r8(registers: &mut Registers, memory: &mut Memory, additional: &Instructi
 fn sbc_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let lhs = registers.read_r8(R8::A);
-    let mut rhs = 0;
     let address = registers.read_r16(additional.r16_src.unwrap());
-    rhs = memory.read_u8(address);
+    let rhs = memory.read_u8(address);
+    let carry = registers.carry_flag() as u8;
+    let (result, carried) = lhs.overflowing_sub(rhs - carry);
+    registers.write_r8(R8::A, result);
+    registers.set_flags(
+        Some(result == 0),
+        Some(true),
+        Some(check_for_half_carry_8bit(lhs, rhs)),
+        Some(carried),
+    );
+}
+
+fn sbc_imm8(registers: &mut Registers, memory: &mut Memory, _additional: &InstructionData) {
+    registers.inc_pc(1);
+    let lhs = registers.read_r8(R8::A);
+    let address = registers.get_pc();
+    let rhs = memory.read_u8(address);
     let carry = registers.carry_flag() as u8;
     let (result, carried) = lhs.overflowing_sub(rhs - carry);
     registers.write_r8(R8::A, result);
@@ -1204,7 +1231,7 @@ impl Instruction {
             0xD3 => None,
             0xD4 => instr!(byte, "call nc, a16", 6, call, InstructionData::new().with_flags(CARRY_FLAG, 0)),
             0xD5 => instr!(byte, "push de", 4, push_r16, InstructionData::new().r16_src(R16::DE)),
-            0xD6 => None,
+            0xD6 => instr!(byte, "sub d8", 2, sub_imm8, InstructionData::new()),
             0xD7 => instr!(byte, "rst 2", 4, rst_n, InstructionData::new().rst_code(0x10)),
             0xD8 => instr!(byte, "ret c", 5, ret_conditional, InstructionData::new().with_flags(CARRY_FLAG, CARRY_FLAG)),
             0xD9 => None,
@@ -1212,7 +1239,7 @@ impl Instruction {
             0xDB => None,
             0xDC => instr!(byte, "call c, a16", 6, call, InstructionData::new().with_flags(CARRY_FLAG, CARRY_FLAG)),
             0xDD => None,
-            0xDE => None,
+            0xDE => instr!(byte, "sbc d8", 2, sbc_imm8, InstructionData::new()),
             0xDF => instr!(byte, "rst 3", 4, rst_n, InstructionData::new().rst_code(0x18)),
             0xE0 => instr!(byte, "ld (a8) a", 3, ld_ff00_imm8_r8, InstructionData::new().r8_src(R8::A)),
             0xE1 => instr!(byte, "pop hl", 3, pop_r16, InstructionData::new().r16_dst(R16::HL)),
