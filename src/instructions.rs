@@ -104,35 +104,47 @@ pub fn jump_rel_imm8(registers: &mut Registers, memory: &mut Memory, additional:
         memory.cpu_cycles = 2;
     }
 }
+
 fn ld_r8_r8(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let value = registers.read_r8(additional.r8_src.unwrap());
     registers.write_r8(additional.r8_dst.unwrap(), value);
 }
+
 fn ld_r8_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let address = registers.read_r16(additional.r16_src.unwrap());
     let value = memory.read_u8(address);
     registers.write_r8(additional.r8_dst.unwrap(), value);
 }
+
 fn ld_r8_imm8(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let value = memory.read_u8(registers.get_pc());
     registers.inc_pc(1);
     registers.write_r8(additional.r8_dst.unwrap(), value);
 }
+
+fn ld_r16_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+    registers.inc_pc(1);
+    let value = registers.read_r16(additional.r16_src.unwrap());
+    registers.write_r16(additional.r16_dst.unwrap(), value)
+}
+
 fn ld_r16_imm16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let value = memory.read_u16(registers.get_pc());
     registers.inc_pc(2);
     registers.write_r16(additional.r16_dst.unwrap(), value);
 }
+
 fn ld_indir_r16_r8(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let value = registers.read_r8(additional.r8_src.unwrap());
     let address = registers.read_r16(additional.r16_dst.unwrap());
     memory.write_u8(address, value);
 }
+
 fn ldi_indir_r16_r8(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let value = registers.read_r8(additional.r8_src.unwrap());
@@ -140,6 +152,7 @@ fn ldi_indir_r16_r8(registers: &mut Registers, memory: &mut Memory, additional: 
     memory.write_u8(address, value);
     registers.write_r16(additional.r16_dst.unwrap(), address.wrapping_add(1));
 }
+
 fn ldd_indir_r16_r8(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let value = registers.read_r8(additional.r8_src.unwrap());
@@ -147,6 +160,7 @@ fn ldd_indir_r16_r8(registers: &mut Registers, memory: &mut Memory, additional: 
     memory.write_u8(address, value);
     registers.write_r16(additional.r16_dst.unwrap(), address.wrapping_sub(1));
 }
+
 fn ld_indir_r16_imm8(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let value = memory.read_u8(registers.get_pc());
@@ -154,6 +168,7 @@ fn ld_indir_r16_imm8(registers: &mut Registers, memory: &mut Memory, additional:
     let address = registers.read_r16(additional.r16_dst.unwrap());
     memory.write_u8(address, value);
 }
+
 fn ld_indir_imm16_sp(
     registers: &mut Registers,
     memory: &mut Memory,
@@ -219,7 +234,7 @@ fn ld_r8_indir_imm16(registers: &mut Registers, memory: &mut Memory, additional:
     registers.write_r8(additional.r8_dst.unwrap(), value);
 }
 
-fn ld_r8_indir_r16_inc(
+fn ldi_r8_indir_r16(
     registers: &mut Registers,
     memory: &mut Memory,
     additional: &InstructionData,
@@ -231,7 +246,7 @@ fn ld_r8_indir_r16_inc(
     registers.write_r16(additional.r16_src.unwrap(), address + 1);
 }
 
-fn ld_r8_indir_r16_dec(
+fn ldd_r8_indir_r16(
     registers: &mut Registers,
     memory: &mut Memory,
     additional: &InstructionData,
@@ -1103,7 +1118,7 @@ impl Instruction {
             0x27 => None,
             0x28 => instr!(byte, "jr z, s8", 3, jump_rel_imm8, InstructionData::new().with_flags(ZERO_FLAG, ZERO_FLAG)),
             0x29 => instr!(byte, "add hl, hl", 2, add_r16_r16, InstructionData::new().r16_src(R16::HL).r16_dst(R16::HL)),
-            0x2A => instr!(byte, "ld a, (hl+)", 2, ld_r8_indir_r16_inc, InstructionData::new().r16_src(R16::HL).r8_dst(R8::A)),
+            0x2A => instr!(byte, "ld a, (hl+)", 2, ldi_r8_indir_r16, InstructionData::new().r16_src(R16::HL).r8_dst(R8::A)),
             0x2B => instr!(byte, "dec hl", 2, dec_r16, InstructionData::new().r16_dst(R16::HL)),
             0x2C => instr!(byte, "inc l", 1, inc_r8, InstructionData::new().r8_dst(R8::L)),
             0x2D => instr!(byte, "dec l", 1, dec_r8, InstructionData::new().r8_dst(R8::L)),
@@ -1119,7 +1134,7 @@ impl Instruction {
             0x37 => instr!(byte, "scf", 1, scf, InstructionData::new()),
             0x38 => instr!(byte, "jr s8", 3, jump_rel_imm8, InstructionData::new().with_flags(CARRY_FLAG, CARRY_FLAG)),
             0x39 => instr!(byte, "add hl, sp", 2, add_r16_r16, InstructionData::new().r16_src(R16::SP).r16_dst(R16::HL)),
-            0x3A => instr!(byte, "ld a, (hl-)", 2, ld_r8_indir_r16_dec, InstructionData::new().r16_src(R16::HL).r8_dst(R8::A)),
+            0x3A => instr!(byte, "ld a, (hl-)", 2, ldd_r8_indir_r16, InstructionData::new().r16_src(R16::HL).r8_dst(R8::A)),
             0x3B => instr!(byte, "dec sp", 2, dec_r16, InstructionData::new().r16_dst(R16::SP)),
             0x3C => instr!(byte, "inc a", 1, inc_r8, InstructionData::new().r8_dst(R8::A)),
             0x3D => instr!(byte, "dec a", 1, dec_r8, InstructionData::new().r8_dst(R8::A)),
@@ -1310,7 +1325,7 @@ impl Instruction {
             0xF6 => instr!(byte, "or d8", 2, or_imm8, InstructionData::new()),
             0xF7 => instr!(byte, "rst 6", 4, rst_n, InstructionData::new().rst_code(0x30)),
             0xF8 => None,
-            0xF9 => None,
+            0xF9 => instr!(byte, "ld hl, sp", 2, ld_r16_r16, InstructionData::new().r16_src(R16::SP).r16_dst(R16::HL)),
             0xFA => instr!(byte, "ld a, (a16)", 4, ld_r8_indir_imm16, InstructionData::new().r8_dst(R8::A)),
             0xFB => instr!(byte, "ei", 1, ei, InstructionData::new()),
             0xFC => None, // Not an instruction
