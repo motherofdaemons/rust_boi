@@ -715,6 +715,17 @@ fn ei(registers: &mut Registers, _memory: &mut Memory, _additional: &Instruction
     registers.set_ime(true);
 }
 
+fn scf(registers: &mut Registers, _memory: &mut Memory, _additional: &InstructionData) {
+    registers.inc_pc(1);
+    registers.set_flags(None, Some(false), Some(false), Some(true));
+}
+
+fn ccf(registers: &mut Registers, _memory: &mut Memory, _additional: &InstructionData) {
+    registers.inc_pc(1);
+    let toggled_carry = !registers.carry_flag();
+    registers.set_flags(None, Some(false), Some(false), Some(toggled_carry));
+}
+
 // Extended fucntion table functions
 fn ext_rl_r8(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(2);
@@ -1086,7 +1097,7 @@ impl Instruction {
             0x34 => instr!(byte, "inc (hl)", 3, inc_indir_r16, InstructionData::new().r16_dst(R16::HL)),
             0x35 => instr!(byte, "dec (hl)", 3, dec_indir_r16, InstructionData::new().r16_dst(R16::HL)),
             0x36 => instr!(byte, "ld (hl), d8", 3, ld_indir_r16_imm8, InstructionData::new().r16_dst(R16::HL)),
-            0x37 => None,
+            0x37 => instr!(byte, "scf", 1, scf, InstructionData::new()),
             0x38 => instr!(byte, "jr s8", 3, jump_rel_imm8, InstructionData::new().with_flags(CARRY_FLAG, CARRY_FLAG)),
             0x39 => instr!(byte, "add hl, sp", 2, add_r16_r16, InstructionData::new().r16_src(R16::SP).r16_dst(R16::HL)),
             0x3A => None,
@@ -1094,7 +1105,7 @@ impl Instruction {
             0x3C => instr!(byte, "inc a", 1, inc_r8, InstructionData::new().r8_dst(R8::A)),
             0x3D => instr!(byte, "dec a", 1, dec_r8, InstructionData::new().r8_dst(R8::A)),
             0x3E => instr!(byte, "ld a, d8", 2, ld_r8_imm8, InstructionData::new().r8_dst(R8::A)),
-            0x3F => None,
+            0x3F => instr!(byte, "ccf", 1, ccf, InstructionData::new()),
             0x40 => instr!(byte, "ld b, b",  1, ld_r8_r8, InstructionData::new().r8_src(R8::B).r8_dst(R8::B)),
             0x41 => instr!(byte, "ld b, c",  1, ld_r8_r8, InstructionData::new().r8_src(R8::C).r8_dst(R8::B)),
             0x42 => instr!(byte, "ld b, d",  1, ld_r8_r8, InstructionData::new().r8_src(R8::D).r8_dst(R8::B)),
