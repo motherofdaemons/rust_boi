@@ -633,6 +633,17 @@ fn ext_bit_indir_r16(registers: &mut Registers, memory: &mut Memory, additional:
     );
 }
 
+fn ext_swap_r8(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+    registers.inc_pc(2);
+    let register = additional.r8_dst.unwrap();
+    let old = registers.read_r8(register);
+    let lower = old & 0b00001111;
+    let upper = (old & 0b11110000) >> 4;
+    let value = (lower << 4) & upper;
+    registers.write_r8(register, value);
+    registers.set_flags(Some(value == 0), Some(false), Some(false), Some(false));
+}
+
 impl Instruction {
     pub fn from_byte(byte: u8, prefixed: bool) -> Option<Instruction> {
         if prefixed {
@@ -693,14 +704,14 @@ impl Instruction {
             0x2D => None,
             0x2E => None,
             0x2F => None,
-            0x30 => None,
-            0x31 => None,
-            0x32 => None,
-            0x33 => None,
-            0x34 => None,
-            0x35 => None,
+            0x30 => instr!(byte, "swap b", 2, ext_swap_r8, InstructionData::new().r8_dst(R8::B)),
+            0x31 => instr!(byte, "swap c", 2, ext_swap_r8, InstructionData::new().r8_dst(R8::C)),
+            0x32 => instr!(byte, "swap d", 2, ext_swap_r8, InstructionData::new().r8_dst(R8::D)),
+            0x33 => instr!(byte, "swap e", 2, ext_swap_r8, InstructionData::new().r8_dst(R8::E)),
+            0x34 => instr!(byte, "swap h", 2, ext_swap_r8, InstructionData::new().r8_dst(R8::H)),
+            0x35 => instr!(byte, "swap l", 2, ext_swap_r8, InstructionData::new().r8_dst(R8::L)),
             0x36 => None,
-            0x37 => None,
+            0x37 => instr!(byte, "swap a", 2, ext_swap_r8, InstructionData::new().r8_dst(R8::A)),
             0x38 => None,
             0x39 => None,
             0x3A => None,
