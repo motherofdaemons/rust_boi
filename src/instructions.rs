@@ -818,12 +818,32 @@ fn ext_rl_r8(registers: &mut Registers, _memory: &mut Memory, additional: &Instr
     registers.write_r8(register, value);
     registers.set_flags(Some(value == 0), Some(false), Some(false), Some(new_carry));
 }
+
 fn ext_rl_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(2);
     let address = registers.read_r16(additional.r16_dst.unwrap());
     let value = memory.read_u8(address);
     let new_carry = (value & 0x80) >> 7 == 0b1;
     let value = (value << 1) | registers.carry_flag() as u8;
+    memory.write_u8(address, value);
+    registers.set_flags(Some(value == 0), Some(false), Some(false), Some(new_carry));
+}
+fn ext_rr_r8(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
+    registers.inc_pc(2);
+    let register = additional.r8_dst.unwrap();
+    let value = registers.read_r8(register);
+    let new_carry = (value & 0b1) == 0b1;
+    let value = (value >> 1) | ((registers.carry_flag() as u8) << 7);
+    registers.write_r8(register, value);
+    registers.set_flags(Some(value == 0), Some(false), Some(false), Some(new_carry));
+}
+
+fn ext_rr_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+    registers.inc_pc(2);
+    let address = registers.read_r16(additional.r16_dst.unwrap());
+    let value = memory.read_u8(address);
+    let new_carry = (value & 0b1) == 0b1;
+    let value = (value >> 1) | ((registers.carry_flag() as u8) << 7);
     memory.write_u8(address, value);
     registers.set_flags(Some(value == 0), Some(false), Some(false), Some(new_carry));
 }
@@ -896,14 +916,14 @@ impl Instruction {
             0x15 => instr!(byte, "rl l", 2, ext_rl_r8, InstructionData::new().r8_dst(R8::L)),
             0x16 => instr!(byte, "rl (hl)", 4, ext_rl_indir_r16, InstructionData::new().r16_dst(R16::HL)),
             0x17 => instr!(byte, "rl a", 2, ext_rl_r8, InstructionData::new().r8_dst(R8::A)),
-            0x18 => None,
-            0x19 => None,
-            0x1A => None,
-            0x1B => None,
-            0x1C => None,
-            0x1D => None,
-            0x1E => None,
-            0x1F => None,
+            0x18 => instr!(byte, "rr b", 2, ext_rr_r8, InstructionData::new().r8_dst(R8::B)),
+            0x19 => instr!(byte, "rr c", 2, ext_rr_r8, InstructionData::new().r8_dst(R8::C)),
+            0x1A => instr!(byte, "rr d", 2, ext_rr_r8, InstructionData::new().r8_dst(R8::D)),
+            0x1B => instr!(byte, "rr e", 2, ext_rr_r8, InstructionData::new().r8_dst(R8::E)),
+            0x1C => instr!(byte, "rr h", 2, ext_rr_r8, InstructionData::new().r8_dst(R8::H)),
+            0x1D => instr!(byte, "rr l", 2, ext_rr_r8, InstructionData::new().r8_dst(R8::L)),
+            0x1E => instr!(byte, "rr (hl)", 4, ext_rr_indir_r16, InstructionData::new().r16_dst(R16::HL)),
+            0x1F => instr!(byte, "rr a", 2, ext_rr_r8, InstructionData::new().r8_dst(R8::A)),
             0x20 => None,
             0x21 => None,
             0x22 => None,
