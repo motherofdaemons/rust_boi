@@ -206,7 +206,11 @@ fn ld_indir_imm16_r8(registers: &mut Registers, memory: &mut Memory, additional:
     memory.write_u8(address, value);
 }
 
-fn ld_r8_indir_r16_inc(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+fn ld_r8_indir_r16_inc(
+    registers: &mut Registers,
+    memory: &mut Memory,
+    additional: &InstructionData,
+) {
     registers.inc_pc(1);
     let address = registers.read_r16(additional.r16_src.unwrap());
     let value = memory.read_u8(address);
@@ -215,29 +219,35 @@ fn ld_r8_indir_r16_inc(registers: &mut Registers, memory: &mut Memory, additiona
 }
 
 //Bit logic funcitons
-fn and(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+fn and_r8(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
-    if let Some(register) = additional.r8_src {
-        let res = registers.read_r8(R8::A) & registers.read_r8(register);
-        registers.write_r8(R8::A, res);
-        registers.set_flags(Some(res == 0), Some(false), Some(true), Some(false));
-    } else if let Some(register) = additional.r16_src {
-        let address = registers.read_r16(register);
-        let value = memory.read_u8(address);
-        let res = registers.read_r8(R8::A) & value;
-        registers.write_r8(R8::A, res);
-        registers.set_flags(Some(res == 0), Some(false), Some(true), Some(false));
-    } else {
-        panic!("Didn't know how to handle and with {:?}", additional);
-    }
+    let result = registers.read_r8(R8::A) & registers.read_r8(additional.r8_src.unwrap());
+    registers.write_r8(R8::A, result);
+    registers.set_flags(Some(result == 0), Some(false), Some(true), Some(false));
+}
+
+fn and_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+    registers.inc_pc(1);
+    let address = registers.read_r16(additional.r16_src.unwrap());
+    let value = memory.read_u8(address);
+    let result = registers.read_r8(R8::A) & value;
+    registers.write_r8(R8::A, result);
+    registers.set_flags(Some(result == 0), Some(false), Some(true), Some(false));
+}
+
+fn and_imm8(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+    registers.inc_pc(1);
+    let result = registers.read_r8(R8::A) & memory.read_u8(registers.get_pc());
+    registers.write_r8(R8::A, result);
+    registers.set_flags(Some(result == 0), Some(false), Some(true), Some(false));
 }
 
 fn xor_r8(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let register = additional.r8_src.unwrap();
-    let res = registers.read_r8(R8::A) ^ registers.read_r8(register);
-    registers.write_r8(R8::A, res);
-    registers.set_flags(Some(res == 0), Some(false), Some(false), Some(false));
+    let result = registers.read_r8(R8::A) ^ registers.read_r8(register);
+    registers.write_r8(R8::A, result);
+    registers.set_flags(Some(result == 0), Some(false), Some(false), Some(false));
 }
 
 fn xor_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
@@ -245,25 +255,24 @@ fn xor_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &In
     let register = additional.r16_src.unwrap();
     let address = registers.read_r16(register);
     let value = memory.read_u8(address);
-    let res = registers.read_r8(R8::A) ^ value;
-    registers.write_r8(R8::A, res);
-    registers.set_flags(Some(res == 0), Some(false), Some(false), Some(false));
+    let result = registers.read_r8(R8::A) ^ value;
+    registers.write_r8(R8::A, result);
+    registers.set_flags(Some(result == 0), Some(false), Some(false), Some(false));
 }
-
 
 //TODO break this out into two different functions one for r8 and one for r16
 fn or(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     if let Some(register) = additional.r8_src {
-        let res = registers.read_r8(R8::A) | registers.read_r8(register);
-        registers.write_r8(R8::A, res);
-        registers.set_flags(Some(res == 0), Some(false), Some(false), Some(false));
+        let result = registers.read_r8(R8::A) | registers.read_r8(register);
+        registers.write_r8(R8::A, result);
+        registers.set_flags(Some(result == 0), Some(false), Some(false), Some(false));
     } else if let Some(register) = additional.r16_src {
         let address = registers.read_r16(register);
         let value = memory.read_u8(address);
-        let res = registers.read_r8(R8::A) | value;
-        registers.write_r8(R8::A, res);
-        registers.set_flags(Some(res == 0), Some(false), Some(false), Some(false));
+        let result = registers.read_r8(R8::A) | value;
+        registers.write_r8(R8::A, result);
+        registers.set_flags(Some(result == 0), Some(false), Some(false), Some(false));
     } else {
         panic!("Didn't know how to handle or with {:?}", additional);
     }
@@ -273,9 +282,9 @@ fn cp_r8(registers: &mut Registers, _memory: &mut Memory, additional: &Instructi
     registers.inc_pc(1);
     let a = registers.read_r8(R8::A);
     let value = registers.read_r8(additional.r8_src.unwrap());
-    let (res, carried) = a.overflowing_sub(value);
+    let (result, carried) = a.overflowing_sub(value);
     registers.set_flags(
-        Some(res == 0),
+        Some(result == 0),
         Some(true),
         Some(check_for_half_carry(a, value)),
         Some(carried),
@@ -287,9 +296,9 @@ fn cp_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &Ins
     let a = registers.read_r8(R8::A);
     let address = registers.read_r16(additional.r16_src.unwrap());
     let value = memory.read_u8(address);
-    let (res, carried) = a.overflowing_sub(value);
+    let (result, carried) = a.overflowing_sub(value);
     registers.set_flags(
-        Some(res == 0),
+        Some(result == 0),
         Some(true),
         Some(check_for_half_carry(a, value)),
         Some(carried),
@@ -301,9 +310,9 @@ fn cp_imm8(registers: &mut Registers, memory: &mut Memory, _additional: &Instruc
     let a = registers.read_r8(R8::A);
     let value = memory.read_u8(registers.get_pc());
     registers.inc_pc(1);
-    let (res, carried) = a.overflowing_sub(value);
+    let (result, carried) = a.overflowing_sub(value);
     registers.set_flags(
-        Some(res == 0),
+        Some(result == 0),
         Some(true),
         Some(check_for_half_carry(a, value)),
         Some(carried),
@@ -406,10 +415,10 @@ fn inc_r8(registers: &mut Registers, _memory: &mut Memory, additional: &Instruct
     registers.inc_pc(1);
     let register = additional.r8_dst.unwrap();
     let value = registers.read_r8(register);
-    let res = value.wrapping_add(1);
-    registers.write_r8(register, res);
+    let result = value.wrapping_add(1);
+    registers.write_r8(register, result);
     registers.set_flags(
-        Some(res == 0),
+        Some(result == 0),
         Some(false),
         Some(check_for_half_carry(value, 1)),
         None,
@@ -420,18 +429,18 @@ fn inc_r16(registers: &mut Registers, _memory: &mut Memory, additional: &Instruc
     registers.inc_pc(1);
     let register = additional.r16_dst.unwrap();
     let value = registers.read_r16(register);
-    let res = value.wrapping_add(1);
-    registers.write_r16(register, res);
+    let result = value.wrapping_add(1);
+    registers.write_r16(register, result);
 }
 
 fn inc_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let address = registers.read_r16(additional.r16_dst.unwrap());
     let value = memory.read_u8(address);
-    let res = value.wrapping_add(1);
-    memory.write_u8(address, res);
+    let result = value.wrapping_add(1);
+    memory.write_u8(address, result);
     registers.set_flags(
-        Some(res == 0),
+        Some(result == 0),
         Some(false),
         Some(check_for_half_carry(value, 1)),
         None,
@@ -448,10 +457,10 @@ fn sub(registers: &mut Registers, memory: &mut Memory, additional: &InstructionD
         let address = registers.read_r16(register);
         rhs = memory.read_u8(address);
     }
-    let (res, carried) = lhs.overflowing_sub(rhs);
-    registers.write_r8(R8::A, res);
+    let (result, carried) = lhs.overflowing_sub(rhs);
+    registers.write_r8(R8::A, result);
     registers.set_flags(
-        Some(res == 0),
+        Some(result == 0),
         Some(true),
         Some(check_for_half_carry(lhs, rhs)),
         Some(carried),
@@ -469,10 +478,10 @@ fn sub_carry(registers: &mut Registers, memory: &mut Memory, additional: &Instru
         rhs = memory.read_u8(address);
     }
     let carry = registers.carry_flag() as u8;
-    let (res, carried) = lhs.overflowing_sub(rhs - carry);
-    registers.write_r8(R8::A, res);
+    let (result, carried) = lhs.overflowing_sub(rhs - carry);
+    registers.write_r8(R8::A, result);
     registers.set_flags(
-        Some(res == 0),
+        Some(result == 0),
         Some(true),
         Some(check_for_half_carry(lhs, rhs)),
         Some(carried),
@@ -483,10 +492,10 @@ fn dec_r8(registers: &mut Registers, _memory: &mut Memory, additional: &Instruct
     registers.inc_pc(1);
     let register = additional.r8_dst.unwrap();
     let value = registers.read_r8(register);
-    let res = value.wrapping_sub(1);
-    registers.write_r8(register, res);
+    let result = value.wrapping_sub(1);
+    registers.write_r8(register, result);
     registers.set_flags(
-        Some(res == 0),
+        Some(result == 0),
         Some(true),
         Some(check_for_half_carry(value, 1)),
         None,
@@ -497,8 +506,8 @@ fn dec_r16(registers: &mut Registers, _memory: &mut Memory, additional: &Instruc
     registers.inc_pc(1);
     let register = additional.r16_dst.unwrap();
     let value = registers.read_r16(register);
-    let res = value.wrapping_sub(1);
-    registers.write_r16(register, res);
+    let result = value.wrapping_sub(1);
+    registers.write_r16(register, result);
 }
 
 fn ret(registers: &mut Registers, memory: &mut Memory, _additional: &InstructionData) {
@@ -539,6 +548,16 @@ fn call(registers: &mut Registers, memory: &mut Memory, additional: &Instruction
     }
 }
 
+//Bit manipulation functions
+fn rlca(registers: &mut Registers, _memory: &mut Memory, _additional: &InstructionData) {
+    registers.inc_pc(1);
+    let value = registers.read_r8(R8::A);
+    let new_carry = (value & 0x80) >> 7 == 0b1;
+    let value = (value << 1) | new_carry as u8;
+    registers.write_r8(R8::A, value);
+    registers.set_flags(Some(false), Some(false), Some(false), Some(new_carry));
+}
+
 fn rla(registers: &mut Registers, _memory: &mut Memory, _additional: &InstructionData) {
     registers.inc_pc(1);
     let value = registers.read_r8(R8::A);
@@ -546,6 +565,31 @@ fn rla(registers: &mut Registers, _memory: &mut Memory, _additional: &Instructio
     let value = (value << 1) | registers.carry_flag() as u8;
     registers.write_r8(R8::A, value);
     registers.set_flags(Some(false), Some(false), Some(false), Some(new_carry));
+}
+
+fn rrca(registers: &mut Registers, _memory: &mut Memory, _additional: &InstructionData) {
+    registers.inc_pc(1);
+    let value = registers.read_r8(R8::A);
+    let new_carry = (value & 0b1) == 0b1;
+    let value = (value >> 1) | ((new_carry as u8) << 7) as u8;
+    registers.write_r8(R8::A, value);
+    registers.set_flags(Some(false), Some(false), Some(false), Some(new_carry));
+}
+
+fn rra(registers: &mut Registers, _memory: &mut Memory, _additional: &InstructionData) {
+    registers.inc_pc(1);
+    let value = registers.read_r8(R8::A);
+    let new_carry = (value & 0b1) == 0b1;
+    let value = (value >> 1) | ((registers.carry_flag() as u8) << 7) as u8;
+    registers.write_r8(R8::A, value);
+    registers.set_flags(Some(false), Some(false), Some(false), Some(new_carry));
+}
+
+fn cpl(registers: &mut Registers, _memory: &mut Memory, _additional: &InstructionData) {
+    registers.inc_pc(1);
+    registers.set_flags(None, Some(true), Some(true), None);
+    let ones_complement = !registers.read_r8(R8::A);
+    registers.write_r8(R8::A, ones_complement);
 }
 
 fn di(registers: &mut Registers, _memory: &mut Memory, _additional: &InstructionData) {
@@ -572,8 +616,8 @@ fn ext_bit_r8(registers: &mut Registers, _memory: &mut Memory, additional: &Inst
     registers.inc_pc(2);
     let value = registers.read_r8(additional.r8_src.unwrap());
     let bit_pos = additional.bit.unwrap();
-    let res = (value >> bit_pos) & 0b1;
-    registers.set_flags(Some(res == 0), Some(false), Some(true), None);
+    let result = (value >> bit_pos) & 0b1;
+    registers.set_flags(Some(result == 0), Some(false), Some(true), None);
 }
 
 fn ext_bit_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
@@ -870,7 +914,7 @@ impl Instruction {
             0x04 => instr!(byte, "inc b", 1, inc_r8, InstructionData::new().r8_dst(R8::B)),
             0x05 => instr!(byte, "dec b", 1, dec_r8, InstructionData::new().r8_dst(R8::B)),
             0x06 => instr!(byte, "ld b, d8", 2, ld_r8_imm8, InstructionData::new().r8_dst(R8::B)),
-            0x07 => None,
+            0x07 => instr!(byte, "rlca", 1, rlca, InstructionData::new()),
             0x08 => instr!(byte, "ld (a16), sp", 5, ld_indir_imm16_sp, InstructionData::new()),
             0x09 => None,
             0x0A => instr!(byte, "ld a, (bc)", 2, ld_r8_indir_r16, InstructionData::new().r8_dst(R8::A).r16_src(R16::BC)),
@@ -878,7 +922,7 @@ impl Instruction {
             0x0C => instr!(byte, "inc c", 1, inc_r8, InstructionData::new().r8_dst(R8::C)),
             0x0D => instr!(byte, "dec c", 1, dec_r8, InstructionData::new().r8_dst(R8::C)),
             0x0E => instr!(byte, "ld c, d8", 2, ld_r8_imm8, InstructionData::new().r8_dst(R8::C)),
-            0x0F => None,
+            0x0F => instr!(byte, "rrca", 1, rrca, InstructionData::new()),
             0x10 => None,
             0x11 => instr!(byte, "ld de, d16", 3, ld_r16_imm16, InstructionData::new().r16_dst(R16::DE)),
             0x12 => instr!(byte, "ld (de), a", 2, ld_indir_r16_r8, InstructionData::new().r16_dst(R16::DE).r8_src(R8::A)),
@@ -894,7 +938,7 @@ impl Instruction {
             0x1C => instr!(byte, "inc e", 1, inc_r8, InstructionData::new().r8_dst(R8::E)),
             0x1D => instr!(byte, "dec e", 1, dec_r8, InstructionData::new().r8_dst(R8::E)),
             0x1E => instr!(byte, "ld e, d8", 2, ld_r8_imm8, InstructionData::new().r8_dst(R8::E)),
-            0x1F => None,
+            0x1F => instr!(byte, "rra", 1, rra, InstructionData::new()),
             0x20 => instr!(byte, "jr nz, s8", 3, jump_rel_imm8, InstructionData::new().with_flags(ZERO_FLAG, 0)),
             0x21 => instr!(byte, "ld hl, d16", 3, ld_r16_imm16, InstructionData::new().r16_dst(R16::HL)),
             0x22 => instr!(byte, "ld (hl+), a", 2, ldi_indir_r16_r8, InstructionData::new().r8_src(R8::A).r16_dst(R16::HL)),
@@ -910,7 +954,7 @@ impl Instruction {
             0x2C => instr!(byte, "inc l", 1, inc_r8, InstructionData::new().r8_dst(R8::L)),
             0x2D => instr!(byte, "dec l", 1, dec_r8, InstructionData::new().r8_dst(R8::L)),
             0x2E => instr!(byte, "ld l, d8", 2, ld_r8_imm8, InstructionData::new().r8_dst(R8::L)),
-            0x2F => None,
+            0x2F => instr!(byte, "cpl", 1, cpl, InstructionData::new()),
             0x30 => instr!(byte, "jr nc, s8", 3, jump_rel_imm8, InstructionData::new().with_flags(CARRY_FLAG, 0)),
             0x31 => instr!(byte, "ld sp, d16", 3, ld_r16_imm16, InstructionData::new().r16_dst(R16::SP)),
             0x32 => instr!(byte, "ld (hl-), a", 2, ldd_indir_r16_r8, InstructionData::new().r8_src(R8::A).r16_dst(R16::HL)),
@@ -1023,14 +1067,14 @@ impl Instruction {
             0x9D => instr!(byte, "sbc a, l", 1, sub_carry, InstructionData::new().r8_src(R8::L)),
             0x9E => instr!(byte, "sbc a, hl", 2, sub_carry, InstructionData::new().r16_src(R16::HL)),
             0x9F => instr!(byte, "sbc a, a", 1, sub_carry, InstructionData::new().r8_src(R8::A)),
-            0xA0 => instr!(byte, "and b", 1, and, InstructionData::new().r8_src(R8::B)),
-            0xA1 => instr!(byte, "and c", 1, and, InstructionData::new().r8_src(R8::C)),
-            0xA2 => instr!(byte, "and d", 1, and, InstructionData::new().r8_src(R8::D)),
-            0xA3 => instr!(byte, "and e", 1, and, InstructionData::new().r8_src(R8::E)),
-            0xA4 => instr!(byte, "and h", 1, and, InstructionData::new().r8_src(R8::H)),
-            0xA5 => instr!(byte, "and l", 1, and, InstructionData::new().r8_src(R8::H)),
-            0xA6 => instr!(byte, "and hl", 2, and, InstructionData::new().r16_src(R16::HL)),
-            0xA7 => instr!(byte, "and a", 1, and, InstructionData::new().r8_src(R8::A)),
+            0xA0 => instr!(byte, "and b", 1, and_r8, InstructionData::new().r8_src(R8::B)),
+            0xA1 => instr!(byte, "and c", 1, and_r8, InstructionData::new().r8_src(R8::C)),
+            0xA2 => instr!(byte, "and d", 1, and_r8, InstructionData::new().r8_src(R8::D)),
+            0xA3 => instr!(byte, "and e", 1, and_r8, InstructionData::new().r8_src(R8::E)),
+            0xA4 => instr!(byte, "and h", 1, and_r8, InstructionData::new().r8_src(R8::H)),
+            0xA5 => instr!(byte, "and l", 1, and_r8, InstructionData::new().r8_src(R8::H)),
+            0xA6 => instr!(byte, "and hl", 2, and_indir_r16, InstructionData::new().r16_src(R16::HL)),
+            0xA7 => instr!(byte, "and a", 1, and_r8, InstructionData::new().r8_src(R8::A)),
             0xA8 => instr!(byte, "xor b", 1, xor_r8, InstructionData::new().r8_src(R8::B)),
             0xA9 => instr!(byte, "xor c", 1, xor_r8, InstructionData::new().r8_src(R8::C)),
             0xAA => instr!(byte, "xor d", 1, xor_r8, InstructionData::new().r8_src(R8::D)),
@@ -1093,7 +1137,7 @@ impl Instruction {
             0xE3 => None,
             0xE4 => None,
             0xE5 => instr!(byte, "push hl", 4, push_r16, InstructionData::new().r16_src(R16::HL)),
-            0xE6 => None,
+            0xE6 => instr!(byte, "and d8", 2, and_imm8, InstructionData::new()),
             0xE7 => instr!(byte, "rst 4", 4, rst_n, InstructionData::new().rst_code(0x20)),
             0xE8 => None,
             0xE9 => None,
