@@ -891,6 +891,26 @@ fn ext_sra_indir_r16(registers: &mut Registers, memory: &mut Memory, additional:
     registers.set_flags(Some(value == 0), Some(false), Some(false), Some(new_carry));
 }
 
+fn ext_srl_r8(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
+    registers.inc_pc(2);
+    let register = additional.r8_dst.unwrap();
+    let value = registers.read_r8(register);
+    let new_carry = (value & 0b1) == 0b1;
+    let value = value >> 1;
+    registers.write_r8(register, value);
+    registers.set_flags(Some(value == 0), Some(false), Some(false), Some(new_carry));
+}
+
+fn ext_srl_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+    registers.inc_pc(2);
+    let address = registers.read_r16(additional.r16_dst.unwrap());
+    let value = memory.read_u8(address);
+    let new_carry = (value & 0b1) == 0b1;
+    let value = value >> 1;
+    memory.write_u8(address, value);
+    registers.set_flags(Some(value == 0), Some(false), Some(false), Some(new_carry));
+}
+
 fn ext_bit_r8(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(2);
     let value = registers.read_r8(additional.r8_src.unwrap());
@@ -1002,14 +1022,14 @@ impl Instruction {
             0x35 => instr!(byte, "swap l", 2, ext_swap_r8, InstructionData::new().r8_dst(R8::L)),
             0x36 => instr!(byte, "swap (hl)", 4, ext_swap_indir_r16, InstructionData::new().r16_dst(R16::HL)),
             0x37 => instr!(byte, "swap a", 2, ext_swap_r8, InstructionData::new().r8_dst(R8::A)),
-            0x38 => None,
-            0x39 => None,
-            0x3A => None,
-            0x3B => None,
-            0x3C => None,
-            0x3D => None,
-            0x3E => None,
-            0x3F => None,
+            0x38 => instr!(byte, "srl b", 2, ext_srl_r8, InstructionData::new().r8_dst(R8::B)),
+            0x39 => instr!(byte, "srl c", 2, ext_srl_r8, InstructionData::new().r8_dst(R8::C)),
+            0x3A => instr!(byte, "srl d", 2, ext_srl_r8, InstructionData::new().r8_dst(R8::D)),
+            0x3B => instr!(byte, "srl e", 2, ext_srl_r8, InstructionData::new().r8_dst(R8::E)),
+            0x3C => instr!(byte, "srl h", 2, ext_srl_r8, InstructionData::new().r8_dst(R8::H)),
+            0x3D => instr!(byte, "srl l", 2, ext_srl_r8, InstructionData::new().r8_dst(R8::L)),
+            0x3E => instr!(byte, "srl (hl)", 4, ext_srl_indir_r16, InstructionData::new().r16_dst(R16::HL)),
+            0x3F => instr!(byte, "srl a", 2, ext_srl_r8, InstructionData::new().r8_dst(R8::A)),
             0x40 => instr!(byte, "bit 0, b", 2, ext_bit_r8, InstructionData::new().r8_src(R8::B).bit(0)),
             0x41 => instr!(byte, "bit 0, c", 2, ext_bit_r8, InstructionData::new().r8_src(R8::C).bit(0)),
             0x42 => instr!(byte, "bit 0, d", 2, ext_bit_r8, InstructionData::new().r8_src(R8::D).bit(0)),
