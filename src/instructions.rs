@@ -294,22 +294,29 @@ fn xor_imm8(registers: &mut Registers, memory: &mut Memory, _additional: &Instru
     registers.set_flags(Some(result == 0), Some(false), Some(false), Some(false));
 }
 
-//TODO break this out into two different functions one for r8 and one for r16
-fn or(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+fn or_r8(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
-    if let Some(register) = additional.r8_src {
-        let result = registers.read_r8(R8::A) | registers.read_r8(register);
-        registers.write_r8(R8::A, result);
-        registers.set_flags(Some(result == 0), Some(false), Some(false), Some(false));
-    } else if let Some(register) = additional.r16_src {
-        let address = registers.read_r16(register);
-        let value = memory.read_u8(address);
-        let result = registers.read_r8(R8::A) | value;
-        registers.write_r8(R8::A, result);
-        registers.set_flags(Some(result == 0), Some(false), Some(false), Some(false));
-    } else {
-        panic!("Didn't know how to handle or with {:?}", additional);
-    }
+    let result = registers.read_r8(R8::A) | registers.read_r8(additional.r8_src.unwrap());
+    registers.write_r8(R8::A, result);
+    registers.set_flags(Some(result == 0), Some(false), Some(false), Some(false));
+}
+
+fn or_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+    registers.inc_pc(1);
+    let address = registers.read_r16(additional.r16_src.unwrap());
+    let value = memory.read_u8(address);
+    let result = registers.read_r8(R8::A) | value;
+    registers.write_r8(R8::A, result);
+    registers.set_flags(Some(result == 0), Some(false), Some(false), Some(false));
+}
+
+fn or_imm8(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+    registers.inc_pc(1);
+    let value = memory.read_u8(registers.get_pc());
+    registers.inc_pc(1);
+    let result = registers.read_r8(R8::A) | value;
+    registers.write_r8(R8::A, result);
+    registers.set_flags(Some(result == 0), Some(false), Some(false), Some(false));
 }
 
 fn cp_r8(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
@@ -1230,14 +1237,14 @@ impl Instruction {
             0xAD => instr!(byte, "xor l", 1, xor_r8, InstructionData::new().r8_src(R8::H)),
             0xAE => instr!(byte, "xor hl", 2, xor_indir_r16, InstructionData::new().r16_src(R16::HL)),
             0xAF => instr!(byte, "xor a", 1, xor_r8, InstructionData::new().r8_src(R8::A)),
-            0xB0 => instr!(byte, "or b", 1, or, InstructionData::new().r8_src(R8::B)),
-            0xB1 => instr!(byte, "or c", 1, or, InstructionData::new().r8_src(R8::C)),
-            0xB2 => instr!(byte, "or d", 1, or, InstructionData::new().r8_src(R8::D)),
-            0xB3 => instr!(byte, "or e", 1, or, InstructionData::new().r8_src(R8::E)),
-            0xB4 => instr!(byte, "or h", 1, or, InstructionData::new().r8_src(R8::H)),
-            0xB5 => instr!(byte, "or l", 1, or, InstructionData::new().r8_src(R8::H)),
-            0xB6 => instr!(byte, "or hl", 2, or, InstructionData::new().r16_src(R16::HL)),
-            0xB7 => instr!(byte, "or a", 1, or, InstructionData::new().r8_src(R8::A)),
+            0xB0 => instr!(byte, "or b", 1, or_r8, InstructionData::new().r8_src(R8::B)),
+            0xB1 => instr!(byte, "or c", 1, or_r8, InstructionData::new().r8_src(R8::C)),
+            0xB2 => instr!(byte, "or d", 1, or_r8, InstructionData::new().r8_src(R8::D)),
+            0xB3 => instr!(byte, "or e", 1, or_r8, InstructionData::new().r8_src(R8::E)),
+            0xB4 => instr!(byte, "or h", 1, or_r8, InstructionData::new().r8_src(R8::H)),
+            0xB5 => instr!(byte, "or l", 1, or_r8, InstructionData::new().r8_src(R8::H)),
+            0xB6 => instr!(byte, "or hl", 2, or_indir_r16, InstructionData::new().r16_src(R16::HL)),
+            0xB7 => instr!(byte, "or a", 1, or_r8, InstructionData::new().r8_src(R8::A)),
             0xB8 => instr!(byte, "cp b",  1, cp_r8, InstructionData::new().r8_src(R8::B)),
             0xB9 => instr!(byte, "cp c",  1, cp_r8, InstructionData::new().r8_src(R8::C)),
             0xBA => instr!(byte, "cp d",  1, cp_r8, InstructionData::new().r8_src(R8::D)),
@@ -1300,7 +1307,7 @@ impl Instruction {
             0xF3 => instr!(byte, "di", 1, di, InstructionData::new()),
             0xF4 => None, // Not an instruction
             0xF5 => instr!(byte, "push af", 4, push_r16, InstructionData::new().r16_src(R16::AF)),
-            0xF6 => None,
+            0xF6 => instr!(byte, "or d8", 2, or_imm8, InstructionData::new()),
             0xF7 => instr!(byte, "rst 6", 4, rst_n, InstructionData::new().rst_code(0x30)),
             0xF8 => None,
             0xF9 => None,
