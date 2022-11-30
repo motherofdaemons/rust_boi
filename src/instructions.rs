@@ -923,6 +923,17 @@ fn ext_swap_r8(registers: &mut Registers, _memory: &mut Memory, additional: &Ins
     registers.set_flags(Some(value == 0), Some(false), Some(false), Some(false));
 }
 
+fn ext_swap_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+    registers.inc_pc(2);
+    let address = registers.read_r16(additional.r16_dst.unwrap());
+    let old = memory.read_u8(address);
+    let lower = old & 0b00001111;
+    let upper = (old & 0b11110000) >> 4;
+    let value = (lower << 4) & upper;
+    memory.write_u8(address, value);
+    registers.set_flags(Some(value == 0), Some(false), Some(false), Some(false));
+}
+
 impl Instruction {
     pub fn from_byte(byte: u8, prefixed: bool) -> Option<Instruction> {
         if prefixed {
@@ -989,7 +1000,7 @@ impl Instruction {
             0x33 => instr!(byte, "swap e", 2, ext_swap_r8, InstructionData::new().r8_dst(R8::E)),
             0x34 => instr!(byte, "swap h", 2, ext_swap_r8, InstructionData::new().r8_dst(R8::H)),
             0x35 => instr!(byte, "swap l", 2, ext_swap_r8, InstructionData::new().r8_dst(R8::L)),
-            0x36 => None,
+            0x36 => instr!(byte, "swap (hl)", 2, ext_swap_indir_r16, InstructionData::new().r16_dst(R16::HL)),
             0x37 => instr!(byte, "swap a", 2, ext_swap_r8, InstructionData::new().r8_dst(R8::A)),
             0x38 => None,
             0x39 => None,
