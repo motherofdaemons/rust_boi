@@ -818,6 +818,15 @@ fn ext_rl_r8(registers: &mut Registers, _memory: &mut Memory, additional: &Instr
     registers.write_r8(register, value);
     registers.set_flags(Some(value == 0), Some(false), Some(false), Some(new_carry));
 }
+fn ext_rl_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+    registers.inc_pc(2);
+    let address = registers.read_r16(additional.r16_dst.unwrap());
+    let value = memory.read_u8(address);
+    let new_carry = (value & 0x80) >> 7 == 0b1;
+    let value = (value << 1) | registers.carry_flag() as u8;
+    memory.write_u8(address, value);
+    registers.set_flags(Some(value == 0), Some(false), Some(false), Some(new_carry));
+}
 
 fn ext_bit_r8(registers: &mut Registers, _memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(2);
@@ -885,7 +894,7 @@ impl Instruction {
             0x13 => instr!(byte, "rl e", 2, ext_rl_r8, InstructionData::new().r8_dst(R8::E)),
             0x14 => instr!(byte, "rl h", 2, ext_rl_r8, InstructionData::new().r8_dst(R8::H)),
             0x15 => instr!(byte, "rl l", 2, ext_rl_r8, InstructionData::new().r8_dst(R8::L)),
-            0x16 => None,
+            0x16 => instr!(byte, "rl (hl)", 4, ext_rl_indir_r16, InstructionData::new().r16_dst(R16::HL)),
             0x17 => instr!(byte, "rl a", 2, ext_rl_r8, InstructionData::new().r8_dst(R8::A)),
             0x18 => None,
             0x19 => None,
