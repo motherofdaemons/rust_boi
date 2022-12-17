@@ -33,7 +33,11 @@ impl Cpu {
             (instruction.execute)(&mut self.registers, memory);
         } else {
             let description = format!("0x{}{:x}", if prefixed { "cb" } else { "" }, opcode);
-            panic!("Couldn't find insturction for: {} at pc {:X}", description, self.registers.get_pc());
+            panic!(
+                "Couldn't find insturction for: {} at pc {:X}",
+                description,
+                self.registers.get_pc()
+            );
         };
     }
 }

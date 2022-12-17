@@ -234,11 +234,7 @@ fn ld_r8_indir_imm16(registers: &mut Registers, memory: &mut Memory, additional:
     registers.write_r8(additional.r8_dst.unwrap(), value);
 }
 
-fn ldi_r8_indir_r16(
-    registers: &mut Registers,
-    memory: &mut Memory,
-    additional: &InstructionData,
-) {
+fn ldi_r8_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let address = registers.read_r16(additional.r16_src.unwrap());
     let value = memory.read_u8(address);
@@ -246,11 +242,7 @@ fn ldi_r8_indir_r16(
     registers.write_r16(additional.r16_src.unwrap(), address + 1);
 }
 
-fn ldd_r8_indir_r16(
-    registers: &mut Registers,
-    memory: &mut Memory,
-    additional: &InstructionData,
-) {
+fn ldd_r8_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
     registers.inc_pc(1);
     let address = registers.read_r16(additional.r16_src.unwrap());
     let value = memory.read_u8(address);
@@ -922,7 +914,11 @@ fn ext_swap_r8(registers: &mut Registers, _memory: &mut Memory, additional: &Ins
     registers.set_flags(Some(value == 0), Some(false), Some(false), Some(false));
 }
 
-fn ext_swap_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+fn ext_swap_indir_r16(
+    registers: &mut Registers,
+    memory: &mut Memory,
+    additional: &InstructionData,
+) {
     registers.inc_pc(2);
     let address = registers.read_r16(additional.r16_dst.unwrap());
     let old = memory.read_u8(address);
@@ -962,7 +958,11 @@ fn ext_res_bit_r8(registers: &mut Registers, _memory: &mut Memory, additional: &
     registers.write_r8(additional.r8_src.unwrap(), result);
 }
 
-fn ext_res_bit_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+fn ext_res_bit_indir_r16(
+    registers: &mut Registers,
+    memory: &mut Memory,
+    additional: &InstructionData,
+) {
     registers.inc_pc(2);
     let address = registers.read_r16(additional.r16_src.unwrap());
     let value = memory.read_u8(address);
@@ -979,7 +979,11 @@ fn ext_set_bit_r8(registers: &mut Registers, _memory: &mut Memory, additional: &
     registers.write_r8(additional.r8_src.unwrap(), result);
 }
 
-fn ext_set_bit_indir_r16(registers: &mut Registers, memory: &mut Memory, additional: &InstructionData) {
+fn ext_set_bit_indir_r16(
+    registers: &mut Registers,
+    memory: &mut Memory,
+    additional: &InstructionData,
+) {
     registers.inc_pc(2);
     let address = registers.read_r16(additional.r16_src.unwrap());
     let value = memory.read_u8(address);

@@ -333,4 +333,3 @@ impl Tile {
         low | high
     }
 }
-

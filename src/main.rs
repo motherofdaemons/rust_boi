@@ -2,14 +2,14 @@ mod cpu;
 mod gameboy;
 mod instruction_data;
 mod instructions;
+mod memory;
 mod ppu;
 mod registers;
 mod sdl;
-mod memory;
 
 use log::info;
 
-use crate::{gameboy::GameBoy, sdl::Emu, memory::RomChunk};
+use crate::{gameboy::GameBoy, memory::RomChunk, sdl::Emu};
 
 use std::{error, path::Path};
 
